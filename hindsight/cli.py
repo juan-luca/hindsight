@@ -22,11 +22,13 @@ if __package__:
     from . import ingest as ingest_mod
     from . import privacy as privacy_mod
     from .embed import embed
+    from .embed import error_signature
 else:  # run as a script: python3 hindsight/cli.py
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import ingest as ingest_mod
     import privacy as privacy_mod
     from embed import embed
+    from embed import error_signature
 
 PKG_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -263,7 +265,7 @@ def cmd_recall(args):
                 "e.fix_tool AS fix_tool, e.fix_ts AS fix_ts, "
                 "e.fix_detail AS fix_detail "
                 "ORDER BY score DESC",
-                {"k": args.k, "v": embed(args.text), "floor": args.floor},
+                {"k": args.k, "v": embed(error_signature(args.text)), "floor": args.floor},
             )
         )
     finally:

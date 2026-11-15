@@ -55,6 +55,42 @@ def _hashed(text, dim):
     return [v / norm for v in vec]
 
 
+# What an error looks like, and the run-specific noise inside it.
+_SIGNAL = re.compile(
+    r"(?i)(error|exception|fatal|no such|not found|denied|refused|failed|cannot|can't|"
+    r"could not|invalid|unknown|missing|timed out|errno)"
+)
+# Lines every failure shares: they say *that* it failed, not *how*.
+_BOILERPLATE = re.compile(
+    r"(?i)^(traceback \(most recent call last\):?|file \".*\", line \d+.*|"
+    r"exit code \d+|exit=\d+)$"
+)
+_PATH = re.compile(r"(?:[A-Za-z]:)?[\w.~<>-]*(?:[\\/][\w.~<>-]+)+[\\/]?")
+_HEX = re.compile(r"\b[0-9a-f]{7,64}\b")
+_NUMBER = re.compile(r"\b\d+\b")
+
+
+def error_signature(text, max_lines=4):
+    """The part of an episode worth matching on: its error lines, with paths,
+    hashes and numbers masked, so the same failure in another command, file
+    or session lands next to it.
+
+    Episode text is `<tool> <file> <command> → <error output>`; the command
+    and any stdout around the error are noise for "have we seen this before".
+    A short query (no arrow, no error-looking line) is its own signature.
+    """
+    part = (text or "").split("→", 1)[1] if "→" in (text or "") else (text or "")
+    lines = [line.strip() for line in part.splitlines() if line.strip()]
+    lines = [line for line in lines if not _BOILERPLATE.match(line)] or lines
+    hits = [line for line in lines if _SIGNAL.search(line)]
+    chosen = (hits or lines)[-max_lines:]
+    signature = " | ".join(chosen)
+    signature = _PATH.sub("<path>", signature)
+    signature = _HEX.sub("<sha>", signature)
+    signature = _NUMBER.sub("<n>", signature)
+    return re.sub(r"\s+", " ", signature).strip()[:400]
+
+
 def _custom():
     spec = os.environ.get("HINDSIGHT_EMBEDDER", "")
     if ":" not in spec:

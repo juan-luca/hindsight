@@ -20,6 +20,7 @@ except ImportError:
     HAVE_RELATE = False
 
 from hindsight import backfill  # noqa: E402
+from hindsight import embed  # noqa: E402
 from hindsight import privacy  # noqa: E402
 
 if HAVE_RELATE:
@@ -104,6 +105,69 @@ class TranscriptTest(unittest.TestCase):
         self.assertTrue(backfill.write_sidecar(self.repo, summary))
         self.assertFalse(backfill.write_sidecar(self.repo, summary))
         self.assertEqual(backfill.read_sidecar(self.repo, "sess-1"), summary)
+
+
+def cosine(a, b):
+    return sum(x * y for x, y in zip(a, b))  # embeddings are L2-normalized
+
+
+class SignatureTest(unittest.TestCase):
+    """Episodes are embedded on what went wrong, not on the noise around it."""
+
+    CAT = "Bash cat /nonexistent/hindsight-test-file.txt → Exit code 1\ncat: /nonexistent/hindsight-test-file.txt: No such file or directory"
+    PY = ("Bash python -c \"import json; json.load(open('.hindsight/tmp/f4-run.json'))\" → exit=1\n"
+          "Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n"
+          "FileNotFoundError: [Errno 2] No such file or directory: '.hindsight/tmp/f4-run.json'")
+    JSON = ("Bash python3 -c 'import json,sys; json.load(sys.stdin)' → Traceback (most recent call last):\n"
+            "  File \"/usr/lib/python3.9/json/decoder.py\", line 340, in decode\n"
+            "json.decoder.JSONDecodeError: Extra data: line 127 column 1 (char 6221)")
+
+    def test_signature_masks_paths_and_numbers(self):
+        self.assertEqual(
+            embed.error_signature(self.CAT),
+            "cat: <path>: No such file or directory",
+        )
+        self.assertNotIn("f4-run", embed.error_signature(self.PY))
+
+    def test_same_error_different_command_is_close(self):
+        cat, py, js = (embed.embed(embed.error_signature(t)) for t in (self.CAT, self.PY, self.JSON))
+        self.assertGreater(cosine(cat, py), 0.5)
+        self.assertGreater(cosine(cat, py), cosine(cat, js) + 0.3)
+
+    def test_query_text_is_its_own_signature(self):
+        self.assertEqual(embed.error_signature("No such file or directory"), "No such file or directory")
+
+
+class PricingTest(unittest.TestCase):
+    """The shipped price table against real numbers."""
+
+    def test_matches_claude_code_reported_cost(self):
+        # Session 512bfbd6 (claude -p on claude-sonnet-5-5, 1-hour cache): Claude
+        # Code reported total_cost_usd 0.2128911 for exactly this usage.
+        usage = {
+            "input_tokens": 12,
+            "output_tokens": 1371,
+            "cache_read_input_tokens": 245291,
+            "cache_creation_input_tokens": 43657,
+            "cache_creation": {"ephemeral_5m_input_tokens": 0, "ephemeral_1h_input_tokens": 43657},
+        }
+        rates = backfill.rates_for("claude-sonnet-5-5", backfill.load_pricing())
+        self.assertAlmostEqual(backfill.price(usage, rates), 0.2128911, places=7)
+
+    def test_every_current_model_is_priced(self):
+        pricing = backfill.load_pricing()
+        for model in ("claude-fable-5-2", "claude-fable-5-1", "claude-fable-5", "claude-opus-5-5",
+                      "claude-sonnet-5-5", "claude-haiku-5-5", "claude-haiku-4-5-20251001"):
+            self.assertIsNotNone(backfill.rates_for(model, pricing), model)
+        self.assertEqual(backfill.rates_for("claude-fable-5-1", pricing)["cache_read"], 0.25)
+        self.assertEqual(backfill.rates_for("claude-fable-5", pricing)["cache_read"], 1.0)
+
+    def test_haiku_long_prompt_tier(self):
+        rates = backfill.rates_for("claude-haiku-5-5", backfill.load_pricing())
+        short = {"input_tokens": 100000, "output_tokens": 1000}
+        long_ = {"input_tokens": 100001, "output_tokens": 1000}
+        self.assertAlmostEqual(backfill.price(short, rates), (100000 * 0.1 + 1000 * 0.5) / 1e6)
+        self.assertAlmostEqual(backfill.price(long_, rates), (100001 * 0.5 + 1000 * 2.5) / 1e6)
 
 
 class PrivacyTest(unittest.TestCase):
@@ -220,6 +284,22 @@ class IngestTest(unittest.TestCase):
         )
         self.assertEqual([(r["a"], r["b"]) for r in similar], [("sess-1/tu9", "sess-1/tu2")])
         self.assertGreater(similar[0]["s"], 0.99)
+
+    def test_agent_self_query_is_recorded(self):
+        write_events(self.repo, "sess-2", [
+            {"ts": "2026-11-15T11:00:00-0300", "event": "UserPromptSubmit",
+             "data": {"prompt": "which session produced the last commit?", "prompt_id": "P9"}},
+            {"ts": "2026-11-15T11:00:05-0300", "event": "PostToolUse",
+             "data": {"tool": "mcp__hindsight__read_cypher", "ok": True, "prompt_id": "P9",
+                      "tool_use_id": "tu9", "statement": "MATCH (s:Session)-[:YIELDED]->(c:Commit) RETURN s.id"}},
+        ])
+        ingest.run(self.repo, quiet=True)
+        rows = self.query(
+            "MATCH (p:Prompt)-[:TRIGGERED]->(t:ToolCall) WHERE t.tool STARTS WITH 'mcp__hindsight__' "
+            "RETURN p.text AS asked, t.command AS cypher"
+        )
+        self.assertEqual(rows, [{"asked": "which session produced the last commit?",
+                                 "cypher": "MATCH (s:Session)-[:YIELDED]->(c:Commit) RETURN s.id"}])
 
     def test_rewritten_history_is_pruned_and_rerun_is_idempotent(self):
         ingest.run(self.repo, quiet=True)

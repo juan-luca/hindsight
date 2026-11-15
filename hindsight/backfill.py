@@ -27,12 +27,14 @@ import sys
 
 if __package__:
     from .embed import embed
+    from .embed import error_signature
     from .record import default_scrubber
     from .record import redact
     from .record import transcript_index
 else:  # run as a script
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     from embed import embed
+    from embed import error_signature
     from record import default_scrubber
     from record import redact
     from record import transcript_index
@@ -75,6 +77,16 @@ def price(usage, rates):
     if write_5m is None and write_1h is None:
         write_5m = usage.get("cache_creation_input_tokens", 0) or 0
         write_1h = 0
+    tier = rates.get("long_context")
+    if isinstance(tier, dict):
+        prompt = (
+            (usage.get("input_tokens", 0) or 0)
+            + (usage.get("cache_read_input_tokens", 0) or 0)
+            + (write_5m or 0)
+            + (write_1h or 0)
+        )
+        if prompt > tier.get("above", float("inf")):
+            rates = tier
     return (
         (usage.get("input_tokens", 0) or 0) * rates["input"]
         + (usage.get("output_tokens", 0) or 0) * rates["output"]
@@ -177,6 +189,14 @@ def _result_text(content):
     return ""
 
 
+def _clip(text, head=200, tail=800):
+    """Long tool output: keep its start and, above all, its end (the
+    exception line of a traceback, the last line of a failed build)."""
+    if len(text) <= head + tail:
+        return text
+    return text[:head] + "\n…\n" + text[-tail:]
+
+
 def parse_transcripts(paths):
     """Replay transcripts (main first, then subagents).
 
@@ -253,7 +273,7 @@ def parse_transcripts(paths):
                                 {
                                     "tool_use_id": block.get("tool_use_id") or "",
                                     "ts": ts,
-                                    "text": _result_text(block.get("content"))[:1000],
+                                    "text": _clip(_result_text(block.get("content"))),
                                 }
                             )
     messages = [by_id[mid] for mid in order if by_id[mid]["model"] != "<synthetic>"]
@@ -445,7 +465,7 @@ def write_summary(db, summary):
         db.execute(
             "MERGE (e:Episode {id: $id}) "
             "SET e.kind = 'error', e.ts = $ts, e.text = $text, "
-            "e.status = $status, e.embedding = $embedding, "
+            "e.status = $status, e.signature = $signature, e.embedding = $embedding, "
             "e.fix_tool = $fix_tool, e.fix_ts = $fix_ts, e.fix_detail = $fix_detail "
             "WITH e MATCH (s:Session {id: $sid}) "
             "MERGE (e)-[:IN_SESSION]->(s)",
@@ -454,7 +474,8 @@ def write_summary(db, summary):
                 "ts": episode["ts"],
                 "text": episode["text"],
                 "status": episode["status"],
-                "embedding": embed(episode["text"]),
+                "signature": error_signature(episode["text"]),
+                "embedding": embed(error_signature(episode["text"])),
                 "fix_tool": episode.get("fix_tool", ""),
                 "fix_ts": episode.get("fix_ts", ""),
                 "fix_detail": episode.get("fix_detail", ""),

@@ -260,7 +260,8 @@ def ingest_events(db, repo, rel_path):
                         "ts": ts,
                         "tool": tool,
                         "ok": ok,
-                        "command": data.get("command", ""),
+                        # A Bash command, or the Cypher an agent sent to its own past.
+                        "command": data.get("command") or data.get("statement") or "",
                         "description": data.get("description", ""),
                         "error": data.get("error", ""),
                         "tuid": data.get("tool_use_id", ""),

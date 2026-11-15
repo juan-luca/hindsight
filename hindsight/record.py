@@ -123,6 +123,16 @@ class Scrubber:
         ]
         # macOS per-user temp dirs, whichever machine wrote them.
         self._rules.append((_MAC_TMP, "<tmp>"))
+        # The account name on its own (the owner column of `ls -l`, `whoami`):
+        # a whole word only, never inside a handle, hostname or longer word.
+        user = os.path.basename((home or "").rstrip("/\\"))
+        if len(user) >= 3:
+            self._rules.append(
+                (
+                    re.compile(r"(?<![\w.@/\\-])%s(?![\w.@/\\-])" % re.escape(user), re.IGNORECASE),
+                    "<user>",
+                )
+            )
 
     def text(self, value):
         if not isinstance(value, str) or not value:
@@ -159,7 +169,9 @@ def default_scrubber(project_dir):
 # ---------------------------------------------------------------- events
 
 PATH_KEYS = ("file_path", "notebook_path", "path")
-TEXT_KEYS = ("pattern", "url", "command", "description", "skill", "prompt")
+# `statement` is the Cypher an agent sends to its own past over MCP
+# (mcp__hindsight__read_cypher); `query` covers search-style tools.
+TEXT_KEYS = ("pattern", "url", "command", "description", "skill", "prompt", "statement", "query")
 
 
 def _lines_changed(tool_response):

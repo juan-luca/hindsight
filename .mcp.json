@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "hindsight": {
+      "command": "sh",
+      "args": [
+        "hindsight/hook.sh",
+        "mcp"
+      ]
+    }
+  }
+}

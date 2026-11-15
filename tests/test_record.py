@@ -55,6 +55,20 @@ class ScrubberTest(unittest.TestCase):
         self.assertEqual(self.mac.text("~/.claude/projects/-Users-ana-other/x"), "~/.claude/projects/<home>-other/x")
 
 
+class UserNameTest(unittest.TestCase):
+    def test_owner_column_and_bare_name_are_scrubbed(self):
+        scrub = record.Scrubber("/Users/ana/proj", "/Users/ana")
+        self.assertEqual(scrub.text("drwxr-xr-x 1 ana staff 0 a.py"), "drwxr-xr-x 1 <user> staff 0 a.py")
+        self.assertEqual(scrub.text("-rw-r--r-- 1 Ana 197121 24 x"), "-rw-r--r-- 1 <user> 197121 24 x")
+        # Not inside other words, handles or hostnames.
+        for keep in ("banana", "ana-luca/repo", "ana.example.org", "dana"):
+            self.assertEqual(scrub.text(keep), keep)
+
+    def test_short_names_are_left_alone(self):
+        scrub = record.Scrubber("/home/al/proj", "/home/al")
+        self.assertEqual(scrub.text("al"), "al")
+
+
 class SlimTest(unittest.TestCase):
     def setUp(self):
         self.scrub = record.Scrubber("/Users/ana/proj", "/Users/ana")
@@ -105,6 +119,19 @@ class SlimTest(unittest.TestCase):
             self.scrub,
         )
         self.assertEqual((data["added"], data["removed"]), (2, 1))
+
+    def test_mcp_self_query_keeps_the_statement(self):
+        data = record.slim(
+            {
+                "hook_event_name": "PostToolUse",
+                "tool_name": "mcp__hindsight__read_cypher",
+                "tool_input": {"statement": "MATCH (c:Commit {sha: 'abc'}) RETURN c", "parameters": {}},
+                "tool_response": [{"type": "text", "text": "[]"}],
+            },
+            self.scrub,
+        )
+        self.assertEqual(data["statement"], "MATCH (c:Commit {sha: 'abc'}) RETURN c")
+        self.assertTrue(data["ok"])
 
     def test_stop_answer_and_session_end(self):
         stop = record.slim(

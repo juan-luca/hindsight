@@ -1,0 +1,17 @@
+{
+ "episodes": [],
+ "files": {},
+ "models": {
+  "claude-sonnet-5-5": {
+   "cache_read": 245291,
+   "cache_write": 43657,
+   "input": 12,
+   "messages": 5,
+   "output": 1371,
+   "usd": 0.2129
+  }
+ },
+ "session_id": "512bfbd6-394c-49b3-82bd-e44e7463447f",
+ "source": "transcript",
+ "version": 1
+}
