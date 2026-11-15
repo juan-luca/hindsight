@@ -9,10 +9,45 @@ it is recording, so every failure path exits 0 and stays silent.
 """
 import json
 import os
+import re
 import sys
 import time
 
 MAX_FIELD = 2000  # events stay slim: file contents live in git, not here
+
+# The recorder is committed to the repo, so prompts and commands are redacted
+# before they touch disk. Patterns cover the common token shapes; add your own
+# via HINDSIGHT_REDACT (a regex; matches are replaced wholesale).
+REDACT_PATTERNS = [
+    (re.compile(r"sk-ant-[A-Za-z0-9_-]{8,}"), "[REDACTED:ANTHROPIC_KEY]"),
+    (re.compile(r"\bAKIA[0-9A-Z]{16}\b"), "[REDACTED:AWS_KEY]"),
+    (re.compile(r"\bgh[pousr]_[A-Za-z0-9]{20,}\b"), "[REDACTED:GITHUB_TOKEN]"),
+    (re.compile(r"\bgithub_pat_[A-Za-z0-9_]{20,}\b"), "[REDACTED:GITHUB_TOKEN]"),
+    (re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b"), "[REDACTED:SLACK_TOKEN]"),
+    (re.compile(r"(?i)\bbearer\s+[a-z0-9._~+/-]{16,}=*"), "Bearer [REDACTED]"),
+    (
+        re.compile(r"(?i)\b(password|passwd|pwd|secret|token|api[_-]?key)\b(\s*[=:]\s*)\S+"),
+        r"\1\2[REDACTED]",
+    ),
+    (
+        re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----"),
+        "[REDACTED:PRIVATE_KEY]",
+    ),
+]
+
+
+def redact(value):
+    if not isinstance(value, str):
+        return value
+    for pattern, replacement in REDACT_PATTERNS:
+        value = pattern.sub(replacement, value)
+    extra = os.environ.get("HINDSIGHT_REDACT")
+    if extra:
+        try:
+            value = re.sub(extra, "[REDACTED]", value)
+        except re.error:
+            pass
+    return value
 
 # tool_input keys worth keeping, when present and string-valued
 KEPT_INPUT_KEYS = (
@@ -33,7 +68,7 @@ def slim(event):
     name = event.get("hook_event_name", "")
     data = {}
     if name == "UserPromptSubmit":
-        data["prompt"] = (event.get("prompt") or "")[:MAX_FIELD]
+        data["prompt"] = redact((event.get("prompt") or "")[:MAX_FIELD])
     elif name == "PostToolUse":
         tool_input = event.get("tool_input") or {}
         tool_response = event.get("tool_response")
@@ -41,7 +76,7 @@ def slim(event):
         for key in KEPT_INPUT_KEYS:
             value = tool_input.get(key)
             if isinstance(value, str) and value:
-                data[key] = value[:MAX_FIELD]
+                data[key] = redact(value[:MAX_FIELD])
         if isinstance(tool_input.get("edits"), list):
             data["edit_count"] = len(tool_input["edits"])
         error = ""
@@ -54,7 +89,7 @@ def slim(event):
                 )[:MAX_FIELD]
         data["ok"] = not error
         if error:
-            data["error"] = error
+            data["error"] = redact(error)
     elif name == "SessionStart":
         data["source"] = event.get("source", "")
     return data
@@ -62,6 +97,8 @@ def slim(event):
 
 def main():
     try:
+        if os.environ.get("HINDSIGHT_DISABLE"):
+            sys.exit(0)
         event = json.load(sys.stdin)
         session_id = event.get("session_id") or "unknown"
         cwd = event.get("cwd") or os.getcwd()

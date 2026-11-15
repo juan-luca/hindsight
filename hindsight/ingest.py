@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Hindsight ingester — replays the recorded agent events and the git history
-into the embedded Relate graph at graph/.
+"""Hindsight ingester — replays the recorded agent events, the git history and
+the agent transcripts into the embedded Relate graph at graph/.
 
-Idempotent by construction (MERGE on stable ids): run it as often as you like,
-or delete graph/ and rebuild the whole store from .hindsight/events/ + git.
+Idempotent by construction (MERGE on stable ids): run it as often as you like.
+The store is incremental — events already ingested are MERGEd, not duplicated.
 """
 import glob
 import json
@@ -18,9 +18,13 @@ try:
 except ImportError:
     sys.exit("relate-db is not installed. Run: pip install relate-db")
 
-REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-STORE = os.path.join(REPO, "graph")
-EVENTS_DIR = os.path.join(REPO, ".hindsight", "events")
+if __package__:
+    from . import backfill as backfill_mod
+    from .embed import DIM
+else:  # run as a script: python3 hindsight/ingest.py
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import backfill as backfill_mod
+    from embed import DIM
 
 # Derived artifacts and environment never become File nodes.
 EXCLUDED_PREFIXES = ("graph/", ".hindsight/", ".venv/")
@@ -31,6 +35,21 @@ READ_TOOLS = {"Read"}
 # A commit authored inside a session's time window (plus this slack after the
 # last event) is considered produced by that session.
 YIELD_SLACK = timedelta(minutes=30)
+
+
+def find_repo(start=None):
+    """Walk up from `start` (or cwd) to the enclosing git / hindsight root."""
+    probe = os.path.abspath(start or os.environ.get("HINDSIGHT_REPO") or os.getcwd())
+    cur = probe
+    while True:
+        if os.path.isdir(os.path.join(cur, ".git")) or os.path.isdir(
+            os.path.join(cur, ".hindsight")
+        ):
+            return cur
+        parent = os.path.dirname(cur)
+        if parent == cur:
+            return probe
+        cur = parent
 
 
 def parse_ts(value):
@@ -45,34 +64,47 @@ def parse_ts(value):
         return None
 
 
-def rel_path(path, cwd):
-    """Normalize to a repo-relative path, or None when outside / excluded."""
-    if not path:
-        return None
-    absolute = path if os.path.isabs(path) else os.path.join(cwd or REPO, path)
-    relative = os.path.relpath(os.path.normpath(absolute), REPO)
-    if relative.startswith(".."):
-        return None
-    relative = relative.replace(os.sep, "/")
-    for prefix in EXCLUDED_PREFIXES:
-        if relative == prefix.rstrip("/") or relative.startswith(prefix):
+def make_rel_path(repo):
+    def rel_path(path, cwd):
+        """Normalize to a repo-relative path, or None when outside / excluded."""
+        if not path:
             return None
-    return relative
+        absolute = path if os.path.isabs(path) else os.path.join(cwd or repo, path)
+        relative = os.path.relpath(os.path.normpath(absolute), repo)
+        if relative.startswith(".."):
+            return None
+        relative = relative.replace(os.sep, "/")
+        for prefix in EXCLUDED_PREFIXES:
+            if relative == prefix.rstrip("/") or relative.startswith(prefix):
+                return None
+        return relative
+
+    return rel_path
 
 
-def ensure_store():
+def ensure_store(store):
     """Create the store with the readable JSON snapshot codec when missing."""
-    if os.path.exists(os.path.join(STORE, "manifest.json")):
+    if os.path.exists(os.path.join(store, "manifest.json")):
         return
     try:
         subprocess.run(
-            ["relate", "-d", STORE, "--snapshot-format", "json", "RETURN 1"],
+            ["relate", "-d", store, "--snapshot-format", "json", "RETURN 1"],
             check=True,
             capture_output=True,
         )
     except (OSError, subprocess.CalledProcessError):
         # Fall through: relate.connect() will create a Parquet-codec store.
         pass
+
+
+def ensure_schema(db):
+    """Vector index for similar-episode recall."""
+    db.execute(
+        "CREATE VECTOR INDEX episode_embedding IF NOT EXISTS "
+        "FOR (e:Episode) ON (e.embedding) "
+        "OPTIONS {indexConfig: {`vector.dimensions`: %d, "
+        "`vector.similarity_function`: 'cosine'}}" % DIM
+    )
 
 
 def merge_file_edge(db, call_id, file_path, edge):
@@ -84,13 +116,14 @@ def merge_file_edge(db, call_id, file_path, edge):
     )
 
 
-def ingest_events(db):
+def ingest_events(db, repo, rel_path):
     """Replay .hindsight/events/*.jsonl into the graph.
 
     Returns {session_id: (first_ts, last_ts)} for commit linking.
     """
+    events_dir = os.path.join(repo, ".hindsight", "events")
     windows = {}
-    for events_file in sorted(glob.glob(os.path.join(EVENTS_DIR, "*.jsonl"))):
+    for events_file in sorted(glob.glob(os.path.join(events_dir, "*.jsonl"))):
         sequence = 0
         last_prompt_id = None
         last_call_id = None
@@ -105,7 +138,7 @@ def ingest_events(db):
                     continue
                 sid = envelope.get("session_id") or "unknown"
                 ts = envelope.get("ts") or ""
-                cwd = envelope.get("cwd") or REPO
+                cwd = envelope.get("cwd") or repo
                 data = envelope.get("data") or {}
                 kind = envelope.get("event") or ""
 
@@ -185,14 +218,14 @@ def ingest_events(db):
     return windows
 
 
-def git_log():
+def git_log(repo):
     """Yield (sha, parents, author, iso_ts, subject, [paths]) per commit."""
     try:
         out = subprocess.run(
             [
                 "git",
                 "-C",
-                REPO,
+                repo,
                 "log",
                 "--pretty=format:%x02%H%x01%P%x01%an%x01%aI%x01%s",
                 "--name-only",
@@ -217,10 +250,10 @@ def git_log():
         yield sha, parents.split(), author, iso_ts, subject, paths
 
 
-def ingest_git(db):
+def ingest_git(db, repo, rel_path):
     """MERGE commits, parent edges and changed files. Returns [(sha, datetime)]."""
     commits = []
-    for sha, parents, author, iso_ts, subject, paths in git_log():
+    for sha, parents, author, iso_ts, subject, paths in git_log(repo):
         db.execute(
             "MERGE (c:Commit {sha: $sha}) "
             "SET c.message = $message, c.author = $author, c.ts = $ts",
@@ -234,7 +267,7 @@ def ingest_git(db):
                 {"parent": parent, "sha": sha},
             )
         for path in paths:
-            normalized = rel_path(os.path.join(REPO, path), REPO)
+            normalized = rel_path(os.path.join(repo, path), repo)
             if not normalized:
                 continue
             db.execute(
@@ -264,23 +297,40 @@ def link_sessions_to_commits(db, windows, commits):
     return linked
 
 
-def main():
-    ensure_store()
-    db = relate.connect(STORE)
-    windows = ingest_events(db)
-    commits = ingest_git(db)
-    linked = link_sessions_to_commits(db, windows, commits)
-    summary = list(
-        db.execute(
-            "MATCH (n) RETURN labels(n)[0] AS label, count(*) AS count "
-            "ORDER BY label"
+def run(repo=None, quiet=False):
+    """Full pipeline: events + git + yield links + episodes + cost backfill."""
+    repo = repo or find_repo()
+    store = os.path.join(repo, "graph")
+    rel_path = make_rel_path(repo)
+    ensure_store(store)
+    db = relate.connect(store)
+    try:
+        ensure_schema(db)
+        windows = ingest_events(db, repo, rel_path)
+        commits = ingest_git(db, repo, rel_path)
+        linked = link_sessions_to_commits(db, windows, commits)
+        backfilled, episodes = backfill_mod.run(db, repo, rel_path, quiet=True)
+        summary = list(
+            db.execute(
+                "MATCH (n) RETURN labels(n)[0] AS label, count(*) AS count "
+                "ORDER BY label"
+            )
         )
-    )
-    db.close()
-    print("hindsight: ingested %d session(s), %d commit(s), %d yield link(s)"
-          % (len(windows), len(commits), linked))
-    for row in summary:
-        print("  %-10s %d" % (row["label"], row["count"]))
+    finally:
+        db.close()
+    if not quiet:
+        print(
+            "hindsight: ingested %d session(s), %d commit(s), %d yield link(s), "
+            "%d episode(s), backfilled %d transcript(s)"
+            % (len(windows), len(commits), linked, episodes, backfilled)
+        )
+        for row in summary:
+            print("  %-10s %d" % (row["label"], row["count"]))
+    return summary
+
+
+def main():
+    run()
 
 
 if __name__ == "__main__":

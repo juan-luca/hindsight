@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hindsight Viewer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.9/standalone/umd/vis-network.min.js"></script>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --border: #30363d; --text: #e6edf3;
+    --muted: #8b949e; --accent: #58a6ff;
+    --c-session: #d29922; --c-prompt: #58a6ff; --c-tool: #8b949e;
+    --c-file: #3fb950; --c-commit: #f85149; --c-episode: #bc8cff;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #f6f8fa; --panel: #ffffff; --border: #d0d7de; --text: #1f2328;
+      --muted: #656d76; --accent: #0969da;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    display: flex; flex-direction: column; height: 100vh;
+  }
+  header {
+    padding: 10px 16px; border-bottom: 1px solid var(--border);
+    display: flex; gap: 14px; align-items: center; flex-wrap: wrap;
+  }
+  header h1 { font-size: 15px; margin: 0; font-weight: 600; }
+  header h1 span { color: var(--muted); font-weight: 400; }
+  #legend { display: flex; gap: 10px; flex-wrap: wrap; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 5px; cursor: pointer;
+    padding: 2px 8px; border: 1px solid var(--border); border-radius: 12px;
+    font-size: 12px; user-select: none;
+  }
+  .chip.off { opacity: 0.35; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; }
+  #search {
+    background: var(--panel); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 10px; min-width: 200px; font: inherit;
+  }
+  #main { flex: 1; display: flex; min-height: 0; }
+  #net { flex: 1; min-width: 0; }
+  #side {
+    width: 320px; max-width: 45vw; border-left: 1px solid var(--border);
+    background: var(--panel); padding: 14px; overflow-y: auto; font-size: 13px;
+  }
+  #side h2 { font-size: 12px; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+  #side .kv { margin: 6px 0; word-break: break-word; }
+  #side .kv b { color: var(--accent); }
+  #drop {
+    position: absolute; inset: 0; display: none; align-items: center;
+    justify-content: center; text-align: center; padding: 24px;
+  }
+  #drop.show { display: flex; }
+  #drop .box {
+    border: 2px dashed var(--border); border-radius: 12px; padding: 40px;
+    color: var(--muted); max-width: 520px;
+  }
+  #drop input { margin-top: 12px; }
+  @media (max-width: 720px) {
+    #side { display: none; }
+    header { padding: 10px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>hindsight <span>· the repo's flight recorder, drawn</span></h1>
+  <div id="legend"></div>
+  <input id="search" placeholder="filter: path, prompt, sha…">
+</header>
+<div id="main" style="position:relative">
+  <div id="net"></div>
+  <aside id="side"><h2>details</h2><div id="detail" class="kv" style="color:var(--muted)">
+    click a node — hover shows the full value. Sessions are amber, prompts blue,
+    files green, commits red, episodes purple.</div></aside>
+  <div id="drop"><div class="box">
+    could not fetch <code>graph/graph.json</code> (file:// blocks fetch).<br><br>
+    serve the repo root instead: <code>make view</code><br>
+    or drop / pick the snapshot here:<br>
+    <input type="file" id="pick" accept=".json">
+  </div></div>
+</div>
+<script>
+const STYLE = {
+  Session: { color: css('--c-session'), shape: 'hexagon', size: 26 },
+  Prompt:  { color: css('--c-prompt'),  shape: 'dot', size: 16 },
+  ToolCall:{ color: css('--c-tool'),    shape: 'dot', size: 7 },
+  File:    { color: css('--c-file'),    shape: 'square', size: 12 },
+  Commit:  { color: css('--c-commit'),  shape: 'diamond', size: 16 },
+  Episode: { color: css('--c-episode'), shape: 'star', size: 16 },
+};
+const HIDDEN_EDGES = new Set(['NEXT']); // sequence edges clutter the layout
+let raw = null, network = null, data = null, offLabels = new Set();
+
+function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function caption(n) {
+  const p = n.properties || {};
+  switch (n.labels[0]) {
+    case 'Session': return 'session ' + String(p.id || '').slice(0, 8);
+    case 'Prompt':  return '“' + String(p.text || '').slice(0, 40) + '…”';
+    case 'ToolCall':return p.tool || 'tool';
+    case 'File':    return String(p.path || '').split('/').pop();
+    case 'Commit':  return String(p.sha || '').slice(0, 7);
+    case 'Episode': return (p.status === 'open' ? '⚠ ' : '✔ ') + 'episode';
+    default:        return n.labels[0];
+  }
+}
+
+function build(g) {
+  raw = g;
+  const nodes = [], edges = [];
+  for (const n of g.nodes) {
+    const label = n.labels[0];
+    const st = STYLE[label] || { color: css('--muted'), shape: 'dot', size: 10 };
+    nodes.push({
+      id: n.id, label: caption(n), labelKind: label,
+      color: { background: st.color, border: st.color },
+      font: { color: css('--text'), size: 11 },
+      shape: st.shape, size: st.size, raw: n,
+      hidden: offLabels.has(label),
+      title: undefined,
+    });
+  }
+  for (const r of g.relationships) {
+    edges.push({
+      from: r.start_node, to: r.end_node, relType: r.type,
+      hidden: HIDDEN_EDGES.has(r.type),
+      arrows: 'to', color: { color: css('--border'), highlight: css('--accent') },
+      font: { color: css('--muted'), size: 9, strokeWidth: 0 },
+      label: r.type.toLowerCase(), raw: r,
+    });
+  }
+  data = { nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges) };
+  network = new vis.Network(document.getElementById('net'), data, {
+    physics: { solver: 'forceAtlas2Based', forceAtlas2Based: { gravitationalConstant: -40, springLength: 90 }, stabilization: { iterations: 150 } },
+    interaction: { hover: true, tooltipDelay: 120 },
+  });
+  network.on('click', params => {
+    const id = params.nodes[0];
+    if (id === undefined) return;
+    const n = data.nodes.get(id).raw;
+    const rows = Object.entries(n.properties || {})
+      .filter(([k]) => k !== 'embedding')
+      .map(([k, v]) => `<div class="kv"><b>${esc(k)}</b> ${esc(String(v))}</div>`)
+      .join('');
+    document.getElementById('detail').innerHTML =
+      `<div class="kv"><b>${esc(n.labels.join(':'))}</b></div>` + rows;
+  });
+  legend();
+  stats();
+}
+
+function legend() {
+  const counts = {};
+  for (const n of raw.nodes) counts[n.labels[0]] = (counts[n.labels[0]] || 0) + 1;
+  const el = document.getElementById('legend');
+  el.innerHTML = '';
+  for (const [label, st] of Object.entries(STYLE)) {
+    if (!counts[label]) continue;
+    const chip = document.createElement('span');
+    chip.className = 'chip' + (offLabels.has(label) ? ' off' : '');
+    chip.innerHTML = `<span class="dot" style="background:${st.color}"></span>${label} ${counts[label]}`;
+    chip.onclick = () => {
+      offLabels.has(label) ? offLabels.delete(label) : offLabels.add(label);
+      data.nodes.update(data.nodes.get()
+        .filter(n => n.labelKind === label)
+        .map(n => ({ id: n.id, hidden: offLabels.has(label) })));
+      chip.classList.toggle('off');
+    };
+    el.appendChild(chip);
+  }
+}
+
+function stats() {
+  document.title = `Hindsight Viewer — ${raw.nodes.length} nodes, ${raw.relationships.length} edges`;
+}
+
+document.getElementById('search').addEventListener('input', e => {
+  const q = e.target.value.toLowerCase();
+  if (!data) return;
+  if (!q) { data.nodes.update(data.nodes.get().map(n => ({ id: n.id, opacity: 1 }))); return; }
+  data.nodes.update(data.nodes.get().map(n => {
+    const hay = JSON.stringify(n.raw.properties || {}).toLowerCase();
+    return { id: n.id, opacity: hay.includes(q) ? 1 : 0.12 };
+  }));
+});
+
+document.getElementById('pick').addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  f.text().then(t => { document.getElementById('drop').classList.remove('show'); build(JSON.parse(t)); });
+});
+
+fetch('../graph/graph.json')
+  .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+  .then(build)
+  .catch(() => document.getElementById('drop').classList.add('show'));
+</script>
+</body>
+</html>
