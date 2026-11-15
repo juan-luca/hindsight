@@ -61,6 +61,23 @@ def redact(value):
 _DRIVE = re.compile(r"^([A-Za-z]):[\\/]+(.*)$")
 _MSYS = re.compile(r"^/(?:mnt/)?([A-Za-z])/(.*)$")
 _MAC_TMP = re.compile(r"(?:/private)?/var/folders/[A-Za-z0-9_+-]+/[A-Za-z0-9_+-]+/T(?=/|\b)")
+_CLAUDE_TREE = re.compile(r"~[\\/]+\.claude(?:[\\/]+[^\s\"'`|;,()]+)+")
+_RELAY_TAG = re.compile(r"<cross-session-message\b[^>]*>")
+PRIVATE_FILE = os.path.join(".hindsight", "private.local")
+
+
+def private_patterns(project_dir):
+    """Regexes from the git-ignored .hindsight/private.local, one per line.
+
+    Lets the owner keep names (clients, other projects, people) out of the
+    published history without ever writing them in a recorded command.
+    """
+    try:
+        with open(os.path.join(project_dir or ".", PRIVATE_FILE), encoding="utf-8") as handle:
+            lines = handle.read().splitlines()
+    except OSError:
+        return []
+    return [line.strip() for line in lines if line.strip() and not line.lstrip().startswith("#")]
 
 
 def path_spellings(path):
@@ -102,7 +119,7 @@ class Scrubber:
     become `<project>` and `<home>`.
     """
 
-    def __init__(self, project_dir, home=None, tmp=None):
+    def __init__(self, project_dir, home=None, tmp=None, private=()):
         self.project_dir = project_dir or ""
         rules = []
         for root, token in (
@@ -133,6 +150,18 @@ class Scrubber:
                     "<user>",
                 )
             )
+        # The user's own Claude config tree (transcripts, notes, other
+        # projects' state) says nothing about this repo: keep only the root.
+        self._rules.append((_CLAUDE_TREE, "~/.claude/…"))
+        # Messages relayed from another session carry routing metadata
+        # (session ids, session names) that belongs to the machine.
+        self._rules.append((_RELAY_TAG, "<cross-session-message>"))
+        # Terms the owner never wants published (.hindsight/private.local).
+        for pattern in private or ():
+            try:
+                self._rules.append((re.compile(pattern, re.IGNORECASE), "[PRIVATE]"))
+            except re.error:
+                continue
 
     def text(self, value):
         if not isinstance(value, str) or not value:
@@ -146,6 +175,8 @@ class Scrubber:
         if not isinstance(path, str) or not path:
             return None
         norm = path.replace("\\", "/")
+        if norm.startswith(("~", "<")):  # already spelled as outside the repo
+            return None
         if not (norm.startswith("/") or _DRIVE.match(path)):
             return norm[2:] if norm.startswith("./") else norm
         for spelling in path_spellings(self.project_dir):
@@ -163,7 +194,12 @@ class Scrubber:
 
 
 def default_scrubber(project_dir):
-    return Scrubber(project_dir, os.path.expanduser("~"), tempfile.gettempdir())
+    return Scrubber(
+        project_dir,
+        os.path.expanduser("~"),
+        tempfile.gettempdir(),
+        private=private_patterns(project_dir),
+    )
 
 
 # ---------------------------------------------------------------- events

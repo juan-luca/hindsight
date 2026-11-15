@@ -17,3 +17,9 @@ graph/wal/
 # Packaging
 *.egg-info/
 build/
+
+# `relate serve` with auth persists a token next to the store.
+*.auth-token
+
+# Terms that must never be published (one regex per line; see README › Privacy).
+.hindsight/*.local

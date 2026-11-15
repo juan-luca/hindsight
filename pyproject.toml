@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hindsight-recorder"
-version = "0.2.0"
+version = "0.3.0"
 description = "The black box your repo ships with: record AI coding sessions into an embedded Relate graph committed next to the code."
 readme = "README.md"
 requires-python = ">=3.9"

@@ -23,6 +23,7 @@ Idempotent: everything here is recomputed per run.
 import glob
 import json
 import os
+import re
 import sys
 
 if __package__:
@@ -280,6 +281,17 @@ def parse_transcripts(paths):
     return messages, tool_uses, errors
 
 
+FIX_WINDOW = 12  # tool calls after the failure where its retry may appear
+_WORDS = re.compile(r"[a-z0-9_.-]{2,}")
+
+
+def _alike(failed, candidate, floor=0.25):
+    """Two commands share enough words (Jaccard) to be the same attempt."""
+    a = set(_WORDS.findall((failed or "").lower()))
+    b = set(_WORDS.findall((candidate or "").lower()))
+    return bool(a and b) and len(a & b) / float(len(a | b)) >= floor
+
+
 def build_episodes(sid, tool_uses, errors, rel_path, cwd, scrub):
     """One episode per failed tool call, with its first plausible fix."""
     errored_ids = {e["tool_use_id"] for e in errors}
@@ -306,7 +318,14 @@ def build_episodes(sid, tool_uses, errors, rel_path, cwd, scrub):
             same_file = (
                 file_rel and candidate["file"] and rel_path(candidate["file"], cwd) == file_rel
             )
-            same_tool = not file_rel and candidate["name"] == use["name"]
+            # No file to anchor on: only a nearby retry that looks like the
+            # failed call counts (not whatever the same tool ran next).
+            same_tool = (
+                not file_rel
+                and candidate["name"] == use["name"]
+                and candidate["seq"] - use["seq"] <= FIX_WINDOW
+                and _alike(use["detail"], candidate["detail"])
+            )
             if same_file or same_tool:
                 fix_id, fix = block_id, candidate
                 break

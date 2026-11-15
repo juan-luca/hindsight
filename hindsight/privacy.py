@@ -21,6 +21,7 @@ if __package__:
     from .record import TEXT_KEYS
     from .record import Scrubber
     from .record import default_scrubber
+    from .record import private_patterns
     from .record import redact
 else:
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -29,6 +30,7 @@ else:
     from record import TEXT_KEYS
     from record import Scrubber
     from record import default_scrubber
+    from record import private_patterns
     from record import redact
 
 FREE_TEXT_KEYS = TEXT_KEYS + ("error", "answer")
@@ -52,6 +54,28 @@ SUSPECTS = [
     ("project-slug", re.compile(r"(?i)\b[a-z]?-{1,2}Users-[A-Za-z0-9._]+-")),
     ("phone", re.compile(r"(?<![\w.:/-])\+\d{1,3}[\s-]?\(?\d{2,4}\)?[\s-]?\d{3,4}[\s-]?\d{3,4}\b")),
 ]
+
+
+ALLOW_FILE = os.path.join(".hindsight", "privacy-allow.txt")
+
+
+def allow_patterns(repo):
+    """Committed regexes for known-safe matches (synthetic test fixtures such
+    as /Users/ana): a finding whose text matches one is not reported."""
+    try:
+        with open(os.path.join(repo, ALLOW_FILE), encoding="utf-8") as handle:
+            lines = handle.read().splitlines()
+    except OSError:
+        return []
+    patterns = []
+    for line in lines:
+        line = line.strip()
+        if line and not line.startswith("#"):
+            try:
+                patterns.append(re.compile(line))
+            except re.error:
+                continue
+    return patterns
 
 
 def _legacy_roots(envelope):
@@ -118,11 +142,17 @@ def scrub_summary(summary, scrubbers):
     return out
 
 
-def find_suspects(text):
+def find_suspects(text, private=()):
     hits = []
     for name, pattern in SUSPECTS:
         for match in pattern.finditer(text):
             hits.append((name, match.group(0)))
+    for term in private:
+        try:
+            if re.search(term, text, re.IGNORECASE):
+                hits.append(("private-term", "(.hindsight/private.local)"))
+        except re.error:
+            continue
     for pattern, label in REDACT_PATTERNS:
         for match in pattern.finditer(text):
             if "[REDACTED" not in match.group(0):
@@ -141,6 +171,15 @@ def run(repo, check=False, out=sys.stdout):
     masked sample) still suspicious after scrubbing.
     """
     base = [default_scrubber(repo)]
+    private = private_patterns(repo)
+    allow = allow_patterns(repo)
+
+    def report(path, number, line):
+        for kind, sample in find_suspects(line, private):
+            if kind != "private-term" and any(a.search(sample) for a in allow):
+                continue
+            findings.append((path, number, kind, _mask(sample)))
+
     seen_roots = []
     changed = 0
     findings = []
@@ -166,8 +205,7 @@ def run(repo, check=False, out=sys.stdout):
                     handle.write(text)
         final = text if not check else "\n".join(lines)
         for number, line in enumerate(final.splitlines(), 1):
-            for kind, sample in find_suspects(line):
-                findings.append((path, number, kind, _mask(sample)))
+            report(path, number, line)
     scrubbers = seen_roots + base
     for path in sorted(glob.glob(os.path.join(repo, ".hindsight", "usage", "*.json"))):
         with open(path, encoding="utf-8") as handle:
@@ -184,8 +222,7 @@ def run(repo, check=False, out=sys.stdout):
                     handle.write(text)
         final = text if not check else original
         for number, line in enumerate(final.splitlines(), 1):
-            for kind, sample in find_suspects(line):
-                findings.append((path, number, kind, _mask(sample)))
+            report(path, number, line)
     verb = "would rewrite" if check else "rewrote"
     print("hindsight scrub: %s %d file(s)" % (verb, changed), file=out)
     for path, number, kind, sample in findings:

@@ -40,7 +40,7 @@ class ScrubberTest(unittest.TestCase):
 
     def test_outside_paths_are_scrubbed_not_relativized(self):
         self.assertIsNone(self.win.relative(r"C:\Users\ana\.claude\notes.md"))
-        self.assertEqual(self.win.path(r"C:\Users\ana\.claude\notes.md"), r"~\.claude\notes.md")
+        self.assertEqual(self.win.path(r"C:\Users\ana\.claude\notes.md"), "~/.claude/…")
 
     def test_free_text(self):
         cmd = 'cd "/c/Users/ana/code/proj" && cat /c/Users/ana/secret.txt'
@@ -52,7 +52,7 @@ class ScrubberTest(unittest.TestCase):
             self.mac.text("/private/var/folders/ab/cd12/T/claude/-Users-ana-code-proj/s"),
             "<tmp>/claude/<project>/s",
         )
-        self.assertEqual(self.mac.text("~/.claude/projects/-Users-ana-other/x"), "~/.claude/projects/<home>-other/x")
+        self.assertEqual(self.mac.text("~/.claude/projects/-Users-ana-other/x"), "~/.claude/…")
 
 
 class UserNameTest(unittest.TestCase):
@@ -67,6 +67,40 @@ class UserNameTest(unittest.TestCase):
     def test_short_names_are_left_alone(self):
         scrub = record.Scrubber("/home/al/proj", "/home/al")
         self.assertEqual(scrub.text("al"), "al")
+
+
+class PrivateLayoutTest(unittest.TestCase):
+    def setUp(self):
+        self.scrub = record.Scrubber("/Users/ana/proj", "/Users/ana", private=[r"secret[- ]project"])
+
+    def test_claude_config_tree_is_collapsed(self):
+        self.assertEqual(self.scrub.text("cat /Users/ana/.claude/notes/plan.md"), "cat ~/.claude/…")
+        self.assertEqual(self.scrub.text(r"read ~\.claude\notes\a.md and go"), "read ~/.claude/… and go")
+        self.assertEqual(self.scrub.text("edit .claude/settings.json"), "edit .claude/settings.json")
+
+    def test_already_scrubbed_outside_paths_stay_outside(self):
+        self.assertIsNone(self.scrub.relative("~/.claude/notes/x.md"))
+        self.assertIsNone(self.scrub.relative("<tmp>/clone/a.py"))
+        self.assertEqual(self.scrub.path(r"~\.claude\notes\x.md"), "~/.claude/…")
+        self.assertEqual(self.scrub.relative("src/a.py"), "src/a.py")
+
+    def test_relayed_message_loses_its_routing(self):
+        text = '<cross-session-message from="bridge:session_X" from-name="other" from-mode="bypass">\nStop now.'
+        self.assertEqual(self.scrub.text(text), "<cross-session-message>\nStop now.")
+
+    def test_local_private_terms(self):
+        self.assertEqual(self.scrub.text("about the Secret-Project now"), "about the [PRIVATE] now")
+
+    def test_private_file_is_loaded_and_bad_regex_ignored(self):
+        project = tempfile.mkdtemp()
+        try:
+            os.makedirs(os.path.join(project, ".hindsight"))
+            with open(os.path.join(project, ".hindsight", "private.local"), "w", encoding="utf-8") as handle:
+                handle.write("# one regex per line\nacme corp\n(unclosed\n\n")
+            scrub = record.default_scrubber(project)
+            self.assertEqual(scrub.text("a note for ACME Corp"), "a note for [PRIVATE]")
+        finally:
+            shutil.rmtree(project, ignore_errors=True)
 
 
 class SlimTest(unittest.TestCase):

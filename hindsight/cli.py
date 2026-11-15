@@ -447,6 +447,15 @@ HOOK_EVENTS = (
     "SessionEnd",
 )
 LAUNCHER = 'sh "$CLAUDE_PROJECT_DIR/.hindsight/hook.sh" %s'
+GITIGNORE_RULES = (
+    ".hindsight/tmp/",
+    ".hindsight/*.local",
+    "graph/.cypherlite/",
+    "graph/.cypherlite.lock",
+    "graph/.cypherlite.writer",
+    "graph/wal/",
+    "*.auth-token",
+)
 OURS = ("record.py", "hook.sh", "hindsight digest")
 
 
@@ -531,6 +540,22 @@ def cmd_init(args):
         with open(attributes, "a", encoding="utf-8", newline="\n") as handle:
             handle.write(("" if not current or current.endswith("\n") else "\n") + rule + "\n")
 
+    # Machine-local state never travels: the transcript index (home paths),
+    # private terms, and the store's locks, WAL and serve token.
+    ignore_path = os.path.join(target, ".gitignore")
+    current = ""
+    if os.path.exists(ignore_path):
+        with open(ignore_path, encoding="utf-8") as handle:
+            current = handle.read()
+    have = set(current.splitlines())
+    missing = [rule for rule in GITIGNORE_RULES if rule not in have]
+    if missing:
+        with open(ignore_path, "a", encoding="utf-8", newline="\n") as handle:
+            if current and not current.endswith("\n"):
+                handle.write("\n")
+            handle.write("\n# hindsight: machine-local state (the history itself is committed)\n")
+            handle.write("\n".join(missing) + "\n")
+
     skill_src = os.path.join(PKG_DIR, "skill.md")
     skill_dst = os.path.join(target, ".claude", "skills", "hindsight", "SKILL.md")
     if os.path.exists(skill_src):
@@ -557,8 +582,10 @@ def cmd_ingest(args):
 
 def cmd_scrub(args):
     repo = ingest_mod.find_repo()
-    _, findings = privacy_mod.run(repo, check=args.check)
-    if args.check and findings:
+    changed, findings = privacy_mod.run(repo, check=args.check)
+    if args.check and (findings or changed):
+        if changed:
+            print("  run `hindsight scrub` to apply the current rules before publishing")
         raise SystemExit(1)
 
 
@@ -576,9 +603,12 @@ def cmd_serve(args):
     cmd = [
         relate_cli, "serve", "--database", store,
         "--bolt", str(args.bolt), "--http", str(args.http), "--mcp", str(args.mcp),
-        "--read-only=live",
+        "--read-only=live", "--auth", "none",
     ]
-    print("serving %s (read-only) · bolt :%d · http :%d · mcp :%d" % (store, args.bolt, args.http, args.mcp))
+    print(
+        "serving %s read-only on 127.0.0.1, no auth · bolt :%d · http :%d (database neo4j) · mcp :%d"
+        % (store, args.bolt, args.http, args.mcp)
+    )
     raise SystemExit(subprocess.call(cmd))
 
 

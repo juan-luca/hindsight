@@ -2,12 +2,12 @@
  "episodes": [
   {
    "file": null,
-   "fix_detail": "cat hindsight/hook.sh; echo ======; cat hindsight/skill.md; echo =====; diff hindsight/skill.md .claude/skills/hindsight/SKILL.md && echo SAME; cat hindsight/pricing.json; cat queries/*.cypher",
-   "fix_tool": "Bash",
-   "fix_tool_use_id": "toolu_018hroCcWmYbEPEtbjCpP9wv",
-   "fix_ts": "2026-11-15T18:20:19.881Z",
+   "fix_detail": "",
+   "fix_tool": "",
+   "fix_tool_use_id": "",
+   "fix_ts": "",
    "id": "26f62b84/toolu_01AHBYUSpqQLux9WvLFRRMTi",
-   "status": "fixed",
+   "status": "open",
    "text": "Bash ls -la hindsight queries tests docs viewer graph .claude .claude/skills 2>/dev/null; wc -l hindsight/*.py hindsight/*.sh README.md docs/*.md; cat .gitignore; cat .claude/settings.json; ls .mcp.json 2>&1 → Exit code 2\n.claude:\ntotal 12\ndrwxr-xr-x 1 <user> 197121    0 Nov 15 15:08 .\ndrwxr-xr-x 1 <user> 197121    0 Nov 15 15:17 ..\n-rw-r--r-- 1 <user> 197121 1436 Nov 15 15:08 settings.json\ndrwxr-xr-x 1 <user> 1971\n…\ncommand\": \"sh \\\"$CLAUDE_PROJECT_DIR/hindsight/hook.sh\\\" record\"\n          }\n        ]\n      }\n    ],\n    \"PostToolUseFailure\": [\n      {\n        \"matcher\": \"*\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"sh \\\"$CLAUDE_PROJECT_DIR/hindsight/hook.sh\\\" record\"\n          }\n        ]\n      }\n    ],\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"sh \\\"$CLAUDE_PROJECT_DIR/hindsight/hook.sh\\\" record\"\n          }\n        ]\n      }\n    ],\n    \"SessionEnd\": [\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"sh \\\"$CLAUDE_PROJECT_DIR/hindsight/hook.sh\\\" record\"\n          }\n        ]\n      }\n    ]\n  }\n}\nls: cannot access '.mcp.json': No such file or directory",
    "tool_use_id": "toolu_01AHBYUSpqQLux9WvLFRRMTi",
    "ts": "2026-11-15T18:20:10.825Z"
@@ -35,6 +35,138 @@
    "text": "Bash export PATH=\"$HOME/.local/bin:$PATH\"; .venv/Scripts/python.exe -m unittest discover -s tests 2>&1 | tail -3; .venv/Scripts/hindsight.exe ingest | head -1; relate query -d ./graph --markdown < queries/70_seen_this_before.cypher; relate query -d ./graph --markdown <<'EOF'\nMATCH (a:Episode)-[r:SIMILAR_ → Exit code 1\nRan 17 tests in 1.950s\r\n\r\nFAILED (errors=1)\r\nTraceback (most recent call last):\r\n  File \"<frozen runpy>\", line 198, in _run_module_as_main\r\n  File \"<frozen runpy>\", line 88, in _run_code\r\n\n…\n| s |\n|---|---|---|\nTraceback (most recent call last):\r\n  File \"<frozen runpy>\", line 198, in _run_module_as_main\r\n  File \"<frozen runpy>\", line 88, in _run_code\r\n  File \".\\.venv\\Scripts\\hindsight.exe\\__main__.py\", line 4, in <module>\r\n  File \".\\hindsight\\cli.py\", line 22, in <module>\r\n    from . import ingest as ingest_mod\r\n  File \".\\hindsight\\ingest.py\", line 25, in <module>\r\n    from . import backfill as backfill_mod\r\n  File \".\\hindsight\\backfill.py\", line 197\r\n    return text[:head] + \"\r\n                         ^\r\nSyntaxError: unterminated string literal (detected at line 197)",
    "tool_use_id": "toolu_01BqXEC3aD6LbikWdaB9APQJ",
    "ts": "2026-11-15T18:27:58.802Z"
+  },
+  {
+   "file": null,
+   "fix_detail": "",
+   "fix_tool": "",
+   "fix_tool_use_id": "",
+   "fix_ts": "",
+   "id": "26f62b84/toolu_01752hXNovBNq1aaHgnFhgB6",
+   "status": "open",
+   "text": "PowerShell $v = \"v1.0.1\"; $dir = \"$HOME\\.local\\bin\"\n$sums = \"$env:TEMP\\relate-SHA256SUMS\"\nInvoke-WebRequest \"https://github.com/relatedb/relate/releases/download/$v/SHA256SUMS\" -OutFile $sums -UseBasicParsing\n$want = (Select-String -Path $sums -Pattern \"relate-windows-amd64.exe\").Line.Split(\" \")[0]\n\"verified:  → Exit code 6\nverified: True\r\n== 10_who_touched_what.cypher\r\nrelate collects anonymous usage metrics; disable anytime: relate telemetry off\nsyntax error: InvalidUnicodeCharacter: parse error: unexpected token \"invalid unicode character: \\u{feff}\"\n  // Who touched what: every file written by an agent, with the sessions that did it.\n  ^\n== 20_why_does_this_file_exist.cypher\r\nsyntax error: InvalidUnicodeCharacter: parse error: unexpected token \"invalid unicode character: \\u{feff}\"\n  // Why does this file exist? Walk back from each file to the prompts that caused it.\n  ^",
+   "tool_use_id": "toolu_01752hXNovBNq1aaHgnFhgB6",
+   "ts": "2026-11-15T18:37:08.863Z"
+  },
+  {
+   "file": null,
+   "fix_detail": "",
+   "fix_tool": "",
+   "fix_tool_use_id": "",
+   "fix_ts": "",
+   "id": "26f62b84/toolu_011z72CLtNcbNQcPMQgQUoWd",
+   "status": "open",
+   "text": "PowerShell $env:Path = \"$HOME\\.local\\bin;$env:Path\"\n$OutputEncoding = New-Object System.Text.UTF8Encoding $false\nGet-ChildItem queries\\*.cypher | Select-Object -First 2 | ForEach-Object { \"== $($_.Name)\"; Get-Content $_.FullName -Raw | relate query -d ./graph --markdown | Select-Object -First 4 } → Exit code 6\n== 10_who_touched_what.cypher\r\nsyntax error: InvalidUnicodeCharacter: parse error: unexpected token \"invalid unicode character: \\u{feff}\"\n  // Who touched what: every file written by an agent, with the sessions that did it.\n  ^\n== 20_why_does_this_file_exist.cypher\r\nsyntax error: InvalidUnicodeCharacter: parse error: unexpected token \"invalid unicode character: \\u{feff}\"\n  // Why does this file exist? Walk back from each file to the prompts that caused it.\n  ^",
+   "tool_use_id": "toolu_011z72CLtNcbNQcPMQgQUoWd",
+   "ts": "2026-11-15T18:37:17.673Z"
+  },
+  {
+   "file": null,
+   "fix_detail": "",
+   "fix_tool": "",
+   "fix_tool_use_id": "",
+   "fix_ts": "",
+   "id": "26f62b84/toolu_01XpUbJpeccugjGsPVVj1mca",
+   "status": "open",
+   "text": "PowerShell $env:Path = \"$HOME\\.local\\bin;$env:Path\"\nGet-ChildItem queries\\*.cypher | ForEach-Object { \"== $($_.Name)\"; relate query -d ./graph --markdown -c (Get-Content $_.FullName -Raw) | Select-Object -First 3 } → Exit code 255\n== 10_who_touched_what.cypher\r\n| file                                 | writes | sessions                                                                                                 \n…\nh>: No such file or directory\"                                            | \"fixed\" | <null>   | \"tail -2 .hindsight/events/ad10c137-34a8-42f7-88c5-\"  | <null> |\r\n== 70_seen_this_before.cypher\r\nError: --command cannot be combined with a positional query\n== 80_agent_asked_its_past.cypher\r\n| session    | at                         | human_asked                                                                        | tool                          | cypher |\r\n|------------|----------------------------|------------------------------------------------------------------------------------|-------------------------------|--------|\r\n| \"512bfbd6\" | \"2026-11-15T15:22:41-0300\" | \"Use the hindsight MCP server (its read_cypher tool) to answer from this repo's p\" | \"mcp__hindsight__get_schema\"  | \"\"     |",
+   "tool_use_id": "toolu_01XpUbJpeccugjGsPVVj1mca",
+   "ts": "2026-11-15T18:37:30.098Z"
+  },
+  {
+   "file": null,
+   "fix_detail": "",
+   "fix_tool": "",
+   "fix_tool_use_id": "",
+   "fix_ts": "",
+   "id": "26f62b84/toolu_01We8VxWUbDx4kbJ9XXZmzWd",
+   "status": "open",
+   "text": "PowerShell $env:Path = \"$HOME\\.local\\bin;$env:Path\"\nforeach ($q in Get-ChildItem queries\\*.cypher) { \"== $($q.Name)\"; cmd /c \"relate query -d ./graph --markdown < queries\\$($q.Name)\" | Select-Object -First 3 } → Exit code 255\n== 10_who_touched_what.cypher\r\n| file                                 | writes | sessions                                                                                                 \n…\n---------------------------------------------------|\r\n| \"ls: cannot access '.mcp.json': No such file or directory\"                | \"26f62b84\"  | \"ad10c137\"      | 0.81  | \"Bash\"        | \"tail -2 .hindsight/events/ad10c137-34a8-42f7-88c5-ef305a40a6\" |\r\n== 80_agent_asked_its_past.cypher\r\n| session    | at                         | human_asked                                                                        | tool                          | cypher |\r\n|------------|----------------------------|------------------------------------------------------------------------------------|-------------------------------|--------|\r\n| \"512bfbd6\" | \"2026-11-15T15:22:41-0300\" | \"Use the hindsight MCP server (its read_cypher tool) to answer from this repo's p\" | \"mcp__hindsight__get_schema\"  | \"\"     |",
+   "tool_use_id": "toolu_01We8VxWUbDx4kbJ9XXZmzWd",
+   "ts": "2026-11-15T18:37:42.260Z"
+  },
+  {
+   "file": null,
+   "fix_detail": "",
+   "fix_tool": "",
+   "fix_tool_use_id": "",
+   "fix_ts": "",
+   "id": "26f62b84/toolu_012QdEUmzV1JGokMAoTFfnP7",
+   "status": "open",
+   "text": "Bash sed -i 's/(39 tests, `make test`)/(40 tests, `make test`)/' README.md; sed -i 's/end to end; 39 tests;/end to end; 40 tests;/' docs/SUBMISSION.md; sed -i 's/| `FIXED_BY` | `Episode` → `ToolCall` | The first later successful call on the same file (or of the same tool) |/| `FIXED_BY` | `Episode` → `To → Exit code 1\nREADME.md:1\ndocs/SUBMISSION.md:1\n38:| `FIXED_BY` | `Episode` → `ToolCall` | The first later successful call on the same file; with no file, a nearby retry whose command looks like the failed one (word overlap). No such call: the episode stays `open` |\nhindsight: ingested 5 session(s), 8 commit(s), 4 committed by a tool call, 6 yield link(s), 12 episode(s), cost for 4 session(s) (3 from transcripts, 1 from .hindsight/usage)\r\n/usr/bin/bash: line 1: queries/60_*.cypher: No such file or directory\n/usr/bin/bash: line 1: queries/80_*.cypher: No such file or directory",
+   "tool_use_id": "toolu_012QdEUmzV1JGokMAoTFfnP7",
+   "ts": "2026-11-15T18:43:39.460Z"
+  },
+  {
+   "file": null,
+   "fix_detail": "",
+   "fix_tool": "",
+   "fix_tool_use_id": "",
+   "fix_ts": "",
+   "id": "26f62b84/toolu_01XW1Sf1MrEX61t5Ez1wkvzv",
+   "status": "open",
+   "text": "Bash export PATH=\"$HOME/.local/bin:$PATH\"; relate query -d ./graph --markdown < queries/60_error_episodes.cypher; relate query -d ./graph --markdown < queries/80_agent_asked_its_past.cypher → Exit code 1\n/usr/bin/bash: line 1: queries/60_error_episodes.cypher: No such file or directory\n/usr/bin/bash: line 1: queries/80_agent_asked_its_past.cypher: No such file or directory",
+   "tool_use_id": "toolu_01XW1Sf1MrEX61t5Ez1wkvzv",
+   "ts": "2026-11-15T18:43:44.902Z"
+  },
+  {
+   "file": null,
+   "fix_detail": "",
+   "fix_tool": "",
+   "fix_tool_use_id": "",
+   "fix_ts": "",
+   "id": "26f62b84/toolu_01PDoP6GTLzCed7mFRL1vFSX",
+   "status": "open",
+   "text": "Bash git checkout HEAD -- queries/ && ls queries/ && .venv/Scripts/python.exe - <<'EOF'\nimport io\np = \"queries/50_what_did_it_cost.cypher\"\ns = open(p, encoding=\"utf-8\").read()\nprint(s)\nEOF → Exit code 255\nerror: unable to create file queries/10_who_touched_what.cypher: Permission denied\nerror: unable to create file queries/20_why_does_this_file_exist.cypher: Permission denied\nerror: unable to create file queries/30_session_activity.cypher: Permission denied\nerror: unable to create file queries/40_commit_provenance.cypher: Permission denied\nerror: unable to create file queries/50_what_did_it_cost.cypher: Permission denied\nerror: unable to create file queries/60_error_episodes.cypher: Permission denied\nerror: unable to create file queries/70_seen_this_before.cypher: Permission denied",
+   "tool_use_id": "toolu_01PDoP6GTLzCed7mFRL1vFSX",
+   "ts": "2026-11-15T18:47:51.066Z"
+  },
+  {
+   "file": null,
+   "fix_detail": "ls -la queries/; touch docs/probe.tmp && echo docs-ok; rm -f docs/probe.tmp; touch queries/x.tmp 2>&1; echo \"exit $?\"; cat .claude/settings.json 2>/dev/null | head -40",
+   "fix_tool": "Bash",
+   "fix_tool_use_id": "toolu_01SuGyH9tYkbMgEuRKnwaFmp",
+   "fix_ts": "2026-11-15T18:48:09.600Z",
+   "id": "26f62b84/toolu_016fEYsrdbxev9assEbbnTM5",
+   "status": "fixed",
+   "text": "Bash rm -f queries/probe.tmp; git checkout HEAD -- queries/ && ls queries/ → Exit code 255\nerror: unable to create file queries/10_who_touched_what.cypher: Permission denied\nerror: unable to create file queries/20_why_does_this_file_exist.cypher: Permission denied\nerror: unable to create file queries/30_session_activity.cypher: Permission denied\nerror: unable to create file queries/40_commit_provenance.cypher: Permission denied\nerror: unable to create file queries/50_what_did_it_cost.cypher: Permission denied\nerror: unable to create file queries/60_error_episodes.cypher: Permission denied\nerror: unable to create file queries/70_seen_this_before.cypher: Permission denied",
+   "tool_use_id": "toolu_016fEYsrdbxev9assEbbnTM5",
+   "ts": "2026-11-15T18:48:03.739Z"
+  },
+  {
+   "file": null,
+   "fix_detail": "",
+   "fix_tool": "",
+   "fix_tool_use_id": "",
+   "fix_ts": "",
+   "id": "26f62b84/toolu_013sDMMQ41Wub8bhKLd5tyFa",
+   "status": "open",
+   "text": "Bash ls -la .claude/; grep -rn -i \"deny\\|sandbox\\|queries\" .claude/*.json 2>/dev/null | head; echo \"---\"; rmdir queries 2>&1; ls -d queries 2>&1 → Exit code 2\ntotal 12\ndrwxr-xr-x 1 <user> 197121    0 Nov 15 15:08 .\ndrwxr-xr-x 1 <user> 197121    0 Nov 15 15:49 ..\n-rw-r--r-- 1 <user> 197121 1436 Nov 15 15:08 settings.json\ndrwxr-xr-x 1 <user> 197121    0 Nov 15 11:43 skills\n---\nls: cannot access 'queries': No such file or directory",
+   "tool_use_id": "toolu_013sDMMQ41Wub8bhKLd5tyFa",
+   "ts": "2026-11-15T18:49:31.935Z"
+  },
+  {
+   "file": "queries/80_agent_asked_its_past.cypher",
+   "fix_detail": "",
+   "fix_tool": "",
+   "fix_tool_use_id": "",
+   "fix_ts": "",
+   "id": "26f62b84/toolu_01SFjyEAAQLLjgE9L5YQtN3x",
+   "status": "open",
+   "text": "Write queries/80_agent_asked_its_past.cypher .\\queries\\80_agent_asked_its_past.cypher → EPERM: operation not permitted, rename '.\\queries\\80_agent_asked_its_past.cypher.tmp.12532.8311068663e2' -> '.\\queries\\80_agent_asked_its_past.cypher'",
+   "tool_use_id": "toolu_01SFjyEAAQLLjgE9L5YQtN3x",
+   "ts": "2026-11-15T18:49:38.678Z"
+  },
+  {
+   "file": null,
+   "fix_detail": "export PATH=\"$HOME/.local/bin:$PATH\"; relate query -d ./graph --markdown <<'EOF'\nMATCH (s:Session) RETURN substring(s.id,0,8) AS sid, s.cost_usd AS usd, s.started_at AS started ORDER BY started;\nMATCH (n) RETURN count(n) AS nodes;\nMATCH ()-[r]->() RETURN count(r) AS rels;\nEOF",
+   "fix_tool": "Bash",
+   "fix_tool_use_id": "toolu_011Nm5hebnWbSDHMRYk95Kbz",
+   "fix_ts": "2026-11-15T18:52:22.239Z",
+   "id": "26f62b84/toolu_01UozZeno3C3rKVcAsnfQuaU",
+   "status": "fixed",
+   "text": "Bash export PATH=\"$HOME/.local/bin:$PATH\"; relate query -d ./graph --markdown <<'EOF'\nMATCH (s:Session) RETURN substring(s.id,0,8) AS s, s.cost_usd AS usd, s.model AS model ORDER BY s.started_at;\nMATCH (n) RETURN count(n) AS nodes;\nMATCH ()-[r]->() RETURN count(r) AS rels;\nEOF → Exit code 6\ntype error: InvalidArgumentType: property access requires a map, node, relationship, temporal, or point value\nstatement 1 of 3 failed; 0 completed and committed; 2 not run",
+   "tool_use_id": "toolu_01UozZeno3C3rKVcAsnfQuaU",
+   "ts": "2026-11-15T18:52:19.400Z"
   }
  ],
  "files": {
@@ -44,14 +176,39 @@
    "usd": 0.0603
   },
   "Makefile": {
+   "messages": 2,
+   "tokens_out": 2563,
+   "usd": 0.1911
+  },
+  "README.md": {
+   "messages": 5,
+   "tokens_out": 10690,
+   "usd": 0.5835
+  },
+  "docs/SCHEMA.md": {
    "messages": 1,
-   "tokens_out": 2009,
-   "usd": 0.118
+   "tokens_out": 3462,
+   "usd": 0.1541
+  },
+  "docs/SUBMISSION.md": {
+   "messages": 1,
+   "tokens_out": 2777,
+   "usd": 0.1448
+  },
+  "docs/VIDEO.md": {
+   "messages": 1,
+   "tokens_out": 2458,
+   "usd": 0.1457
   },
   "hindsight/backfill.py": {
-   "messages": 2,
-   "tokens_out": 1794,
-   "usd": 0.1241
+   "messages": 3,
+   "tokens_out": 2748,
+   "usd": 0.2418
+  },
+  "hindsight/cli.py": {
+   "messages": 1,
+   "tokens_out": 801,
+   "usd": 0.053
   },
   "hindsight/embed.py": {
    "messages": 2,
@@ -59,9 +216,9 @@
    "usd": 0.1436
   },
   "hindsight/ingest.py": {
-   "messages": 1,
-   "tokens_out": 618,
-   "usd": 0.0505
+   "messages": 2,
+   "tokens_out": 1316,
+   "usd": 0.085
   },
   "hindsight/pricing.json": {
    "messages": 1,
@@ -69,9 +226,9 @@
    "usd": 0.0564
   },
   "hindsight/record.py": {
-   "messages": 2,
-   "tokens_out": 2362,
-   "usd": 0.1154
+   "messages": 5,
+   "tokens_out": 4928,
+   "usd": 0.3421
   },
   "hindsight/skill.md": {
    "messages": 1,
@@ -83,25 +240,30 @@
    "tokens_out": 1013,
    "usd": 0.0859
   },
+  "queries/80_agent_asked_its_past.cypher": {
+   "messages": 1,
+   "tokens_out": 604,
+   "usd": 0.0461
+  },
   "tests/test_pipeline.py": {
-   "messages": 4,
-   "tokens_out": 5240,
-   "usd": 0.3248
+   "messages": 8,
+   "tokens_out": 11404,
+   "usd": 0.6614
   },
   "tests/test_record.py": {
-   "messages": 2,
-   "tokens_out": 2362,
-   "usd": 0.1154
+   "messages": 4,
+   "tokens_out": 4952,
+   "usd": 0.2733
   }
  },
  "models": {
   "claude-opus-5-5": {
-   "cache_read": 9886526,
-   "cache_write": 239224,
-   "input": 106,
-   "messages": 52,
-   "output": 45475,
-   "usd": 4.801
+   "cache_read": 31941943,
+   "cache_write": 449400,
+   "input": 296,
+   "messages": 147,
+   "output": 135622,
+   "usd": 12.6972
   }
  },
  "session_id": "26f62b84-1d13-4294-8b86-ea9c33856883",

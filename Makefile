@@ -32,10 +32,11 @@ blame:
 digest:
 	$(PY) hindsight/cli.py digest
 
-## Bolt (7687, neo4j-browser compatible) + HTTP (7474) + MCP (7475), read-only
+## Bolt (7687, neo4j-browser) + HTTP (7474, database "neo4j") + MCP (7475):
+## read-only, loopback only, no auth (the store is public, committed data)
 serve:
 	@[ -d graph/.cypherlite ] || $(RELATE) -d ./graph "RETURN 1" >/dev/null
-	$(RELATE) serve --database ./graph --bolt 7687 --http 7474 --mcp 7475 --read-only=live
+	$(RELATE) serve --database ./graph --bolt 7687 --http 7474 --mcp 7475 --read-only=live --auth none
 
 ## Static graph viewer at http://localhost:8787/viewer/
 view:

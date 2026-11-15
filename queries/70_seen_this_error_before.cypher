@@ -1,4 +1,4 @@
-// "We have seen this error before": for every error episode, the closest
+// We have seen this error before: for every error episode, the closest
 // EARLIER episode by vector search over the embeddings stored in the graph.
 // No model and no API key: the query vector is the episode's own embedding.
 // Index scores are (1 + cosine) / 2, so 0.5 means unrelated.

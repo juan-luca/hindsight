@@ -1,0 +1,4 @@
+# Known-safe matches for `hindsight scrub --check` (committed, public).
+# One regex per line. Only synthetic values belong here, never a real name.
+# The test fixtures' made-up account "ana" (/Users/ana, C:\Users\ana, /home/ana):
+(?i)(?:users|home)[\\/]+ana\b

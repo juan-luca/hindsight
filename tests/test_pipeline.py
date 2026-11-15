@@ -72,7 +72,11 @@ class TranscriptTest(unittest.TestCase):
             {"type": "assistant", "timestamp": "2026-01-01T00:00:04Z", "message": {
                 "id": "m3", "model": "claude-opus-5-5", "usage": {"output_tokens": 5},
                 "content": [{"type": "tool_use", "id": "tu3", "name": "Bash",
-                             "input": {"command": "ls"}}]}},
+                             "input": {"command": "git status --short"}}]}},
+            {"type": "assistant", "timestamp": "2026-01-01T00:00:05Z", "message": {
+                "id": "m4", "model": "claude-opus-5-5", "usage": {"output_tokens": 5},
+                "content": [{"type": "tool_use", "id": "tu4", "name": "Bash",
+                             "input": {"command": "touch %s/missing && cat %s/missing" % (self.repo, self.repo)}}]}},
         ]
         with open(self.transcript, "w", encoding="utf-8") as handle:
             for line in lines:
@@ -90,14 +94,25 @@ class TranscriptTest(unittest.TestCase):
                                        "cache_write_5m": 5.0, "cache_write_1h": 8.0}}
         summary = backfill.summarize("sess-1", [self.transcript], self.repo, self.rel_path, pricing)
         model = summary["models"]["claude-opus-5-5"]
-        self.assertEqual(model["messages"], 3)
-        self.assertEqual(model["output"], 2015)
-        self.assertAlmostEqual(model["usd"], (1000 * 4 + 2015 * 20) / 1e6, places=6)
+        self.assertEqual(model["messages"], 4)
+        self.assertEqual(model["output"], 2020)
+        self.assertAlmostEqual(model["usd"], (1000 * 4 + 2020 * 20) / 1e6, places=6)
         self.assertEqual(summary["files"]["a.py"]["tokens_out"], 2000)
         [episode] = summary["episodes"]
         self.assertEqual(episode["status"], "fixed")
         self.assertEqual(episode["tool_use_id"], "tu2")
-        self.assertEqual(episode["fix_tool_use_id"], "tu3")
+        # Not the unrelated `git status` right after: the call that retried it.
+        self.assertEqual(episode["fix_tool_use_id"], "tu4")
+
+    def test_no_lookalike_retry_means_open(self):
+        uses = {
+            "tu1": {"seq": 1, "ts": "t1", "name": "Bash", "file": "", "detail": "ls -la .mcp.json docs"},
+            "tu2": {"seq": 2, "ts": "t2", "name": "Bash", "file": "", "detail": "cat hindsight/hook.sh"},
+        }
+        errors = [{"tool_use_id": "tu1", "ts": "t1", "text": "ls: cannot access '.mcp.json'"}]
+        scrub = backfill.default_scrubber(self.repo)
+        [episode] = backfill.build_episodes("s", uses, errors, self.rel_path, self.repo, scrub)
+        self.assertEqual((episode["status"], episode["fix_tool_use_id"]), ("open", ""))
         self.assertNotIn(self.repo, episode["text"])  # scrubbed to "."
 
     def test_sidecar_round_trip_is_stable(self):
@@ -191,6 +206,29 @@ class PrivacyTest(unittest.TestCase):
             "mail ana@corp.example, cd /home/ana/x, C:\\Users\\ana\\y")}
         self.assertEqual(kinds, {"email", "home-path"})
         self.assertEqual(privacy.find_suspects("Co-Authored-By: X <noreply@anthropic.com>"), [])
+
+    def test_gate_allowlist_and_private_terms(self):
+        repo = tempfile.mkdtemp()
+        try:
+            write_events(repo, "s1", [
+                {"ts": "t", "event": "PostToolUse",
+                 "data": {"tool": "Bash", "command": r"python -c 'assert f(r\"C:\Users\ana\x\")'"}},
+                {"ts": "t", "event": "UserPromptSubmit", "data": {"prompt": "ping the ACME team"}},
+            ])
+            with open(os.path.join(repo, ".hindsight", "privacy-allow.txt"), "w", encoding="utf-8") as handle:
+                handle.write("# synthetic test fixtures\n(?i)users[\\\\/]+ana\\b\n")
+            out = io.StringIO()
+            changed, findings = privacy.run(repo, check=True, out=out)
+            self.assertEqual((changed, findings), (0, []))
+            with open(os.path.join(repo, ".hindsight", "private.local"), "w", encoding="utf-8") as handle:
+                handle.write("acme\n")
+            changed, findings = privacy.run(repo, check=True, out=out)
+            self.assertEqual([f[2] for f in findings], ["private-term"])
+            self.assertEqual(changed, 1)
+            privacy.run(repo, check=False, out=out)
+            self.assertEqual(privacy.run(repo, check=True, out=out), (0, []))
+        finally:
+            shutil.rmtree(repo, ignore_errors=True)
 
 
 @unittest.skipUnless(HAVE_RELATE, "needs relate-db")
@@ -289,6 +327,9 @@ class IngestTest(unittest.TestCase):
         write_events(self.repo, "sess-2", [
             {"ts": "2026-11-15T11:00:00-0300", "event": "UserPromptSubmit",
              "data": {"prompt": "which session produced the last commit?", "prompt_id": "P9"}},
+            {"ts": "2026-11-15T11:00:03-0300", "event": "PostToolUseFailure",
+             "data": {"tool": "mcp__hindsight__read_cypher", "ok": False, "prompt_id": "P9",
+                      "tool_use_id": "tu8", "query": "MATCH (c:Commit) RETURN c.sha"}},
             {"ts": "2026-11-15T11:00:05-0300", "event": "PostToolUse",
              "data": {"tool": "mcp__hindsight__read_cypher", "ok": True, "prompt_id": "P9",
                       "tool_use_id": "tu9", "statement": "MATCH (s:Session)-[:YIELDED]->(c:Commit) RETURN s.id"}},
@@ -296,10 +337,14 @@ class IngestTest(unittest.TestCase):
         ingest.run(self.repo, quiet=True)
         rows = self.query(
             "MATCH (p:Prompt)-[:TRIGGERED]->(t:ToolCall) WHERE t.tool STARTS WITH 'mcp__hindsight__' "
-            "RETURN p.text AS asked, t.command AS cypher"
+            "RETURN p.text AS asked, t.ok AS ok, t.command AS cypher ORDER BY t.ts"
         )
-        self.assertEqual(rows, [{"asked": "which session produced the last commit?",
-                                 "cypher": "MATCH (s:Session)-[:YIELDED]->(c:Commit) RETURN s.id"}])
+        self.assertEqual(rows, [
+            {"asked": "which session produced the last commit?", "ok": False,
+             "cypher": "MATCH (c:Commit) RETURN c.sha"},
+            {"asked": "which session produced the last commit?", "ok": True,
+             "cypher": "MATCH (s:Session)-[:YIELDED]->(c:Commit) RETURN s.id"},
+        ])
 
     def test_rewritten_history_is_pruned_and_rerun_is_idempotent(self):
         ingest.run(self.repo, quiet=True)
@@ -359,6 +404,27 @@ class InitTest(unittest.TestCase):
             self.assertTrue(os.path.isfile(os.path.join(target, ".hindsight", "hook.sh")))
             with open(os.path.join(target, ".gitattributes")) as handle:
                 self.assertEqual(handle.read().count("eol=lf"), 1)
+            with open(os.path.join(target, ".gitignore")) as handle:
+                ignore = handle.read()
+            for rule in (".hindsight/tmp/", ".hindsight/*.local", "graph/wal/", "*.auth-token"):
+                self.assertEqual(ignore.count(rule), 1, rule)
+        finally:
+            shutil.rmtree(target, ignore_errors=True)
+
+    def test_gitignore_keeps_existing_rules(self):
+        target = tempfile.mkdtemp()
+        try:
+            with open(os.path.join(target, ".gitignore"), "w", encoding="utf-8") as handle:
+                handle.write("node_modules/")  # no trailing newline
+            with open(os.devnull, "w") as sink:
+                from contextlib import redirect_stdout
+
+                with redirect_stdout(sink):
+                    cli.main(["init", target])
+            with open(os.path.join(target, ".gitignore"), encoding="utf-8") as handle:
+                lines = handle.read().splitlines()
+            self.assertEqual(lines[0], "node_modules/")
+            self.assertIn(".hindsight/tmp/", lines)
         finally:
             shutil.rmtree(target, ignore_errors=True)
 

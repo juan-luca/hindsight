@@ -3,7 +3,7 @@
 MATCH (s:Session)-[r:SPENT]->(f:File)
 RETURN f.path AS file,
        sum(r.tokens_out) AS out_tokens,
-       sum(r.usd) AS usd_estimate,
+       round(sum(r.usd) * 100) / 100 AS usd_estimate,
        count(DISTINCT s) AS sessions
 ORDER BY usd_estimate DESC
 LIMIT 15;

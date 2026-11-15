@@ -1,0 +1,42 @@
+{
+ "episodes": [
+  {
+   "file": null,
+   "fix_detail": "",
+   "fix_tool": "",
+   "fix_tool_use_id": "",
+   "fix_ts": "",
+   "id": "014322ff/toolu_01RRkeyWkFe7jMM4nntYvnoe",
+   "status": "open",
+   "text": "mcp__hindsight__read_cypher → invalid params: missing string \"statement\"\n\nThis tool's input schema was not in your prompt when you called it. The input schema is: {\"type\":\"object\",\"properties\":{\"parameters\":{\"default\":{},\"description\":\"The statement's parameters; a `rows` array feeds `$rows`.\",\"type\":\"object\"},\"statement\":{\"description\":\"The Cypher statement.\",\"type\":\"string\"}},\"required\":[\"statement\"]}\nIf your input does not match this schema, correct it and call the tool again. If it matches, the error above has another cause. If the corrected call fails the same way, call ToolSearch with query \"select:mcp__hindsight__read_cypher\" to load the tool, then call it again.",
+   "tool_use_id": "toolu_01RRkeyWkFe7jMM4nntYvnoe",
+   "ts": "2026-11-15T18:42:25.427Z"
+  },
+  {
+   "file": null,
+   "fix_detail": "",
+   "fix_tool": "",
+   "fix_tool_use_id": "",
+   "fix_ts": "",
+   "id": "014322ff/toolu_01YDPzah38NgxoMgs1SHUZn9",
+   "status": "open",
+   "text": "mcp__hindsight__read_cypher → invalid params: missing string \"statement\"\n\nThis tool's input schema was not in your prompt when you called it. The input schema is: {\"type\":\"object\",\"properties\":{\"parameters\":{\"default\":{},\"description\":\"The statement's parameters; a `rows` array feeds `$rows`.\",\"type\":\"object\"},\"statement\":{\"description\":\"The Cypher statement.\",\"type\":\"string\"}},\"required\":[\"statement\"]}\nIf your input does not match this schema, correct it and call the tool again. If it matches, the error above has another cause. If the corrected call fails the same way, call ToolSearch with query \"select:mcp__hindsight__read_cypher\" to load the tool, then call it again.",
+   "tool_use_id": "toolu_01YDPzah38NgxoMgs1SHUZn9",
+   "ts": "2026-11-15T18:42:26.512Z"
+  }
+ ],
+ "files": {},
+ "models": {
+  "claude-sonnet-5-5": {
+   "cache_read": 190057,
+   "cache_write": 46710,
+   "input": 8,
+   "messages": 4,
+   "output": 2013,
+   "usd": 0.226
+  }
+ },
+ "session_id": "014322ff-eee1-4d04-b7ce-a6d2b662b50c",
+ "source": "transcript",
+ "version": 1
+}

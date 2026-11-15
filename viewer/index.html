@@ -11,6 +11,7 @@
     --muted: #8b949e; --accent: #58a6ff;
     --c-session: #d29922; --c-prompt: #58a6ff; --c-tool: #8b949e;
     --c-file: #3fb950; --c-commit: #f85149; --c-episode: #bc8cff;
+    --c-model: #39c5cf;
   }
   @media (prefers-color-scheme: light) {
     :root:not([data-theme="dark"]) {
@@ -79,7 +80,7 @@
   <div id="net"></div>
   <aside id="side"><h2>details</h2><div id="detail" class="kv" style="color:var(--muted)">
     click a node — hover shows the full value. Sessions are amber, prompts blue,
-    files green, commits red, episodes purple.</div></aside>
+    files green, commits red, episodes purple, models cyan.</div></aside>
   <div id="drop"><div class="box">
     could not fetch <code>graph/graph.json</code> (file:// blocks fetch).<br><br>
     serve the repo root instead: <code>make view</code><br>
@@ -95,6 +96,7 @@ const STYLE = {
   File:    { color: css('--c-file'),    shape: 'square', size: 12 },
   Commit:  { color: css('--c-commit'),  shape: 'diamond', size: 16 },
   Episode: { color: css('--c-episode'), shape: 'star', size: 16 },
+  Model:   { color: css('--c-model'),   shape: 'triangle', size: 18 },
 };
 const HIDDEN_EDGES = new Set(['NEXT']); // sequence edges clutter the layout
 let raw = null, network = null, data = null, offLabels = new Set();
@@ -111,6 +113,7 @@ function caption(n) {
     case 'File':    return String(p.path || '').split('/').pop();
     case 'Commit':  return String(p.sha || '').slice(0, 7);
     case 'Episode': return (p.status === 'open' ? '⚠ ' : '✔ ') + 'episode';
+    case 'Model':   return String(p.id || 'model').replace(/^claude-/, '');
     default:        return n.labels[0];
   }
 }
