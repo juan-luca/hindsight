@@ -40,7 +40,14 @@ def open_db(repo, read_only=True):
         sys.exit(
             "no graph at %s — run `hindsight ingest` first" % store
         )
-    return relate.connect(store, read_only=read_only)
+    if read_only:
+        try:
+            return relate.connect(store, read_only=read_only)
+        except relate.RelateError:
+            # A fresh clone carries only the snapshot (graph.json + manifest),
+            # which read-only mode refuses; a writable open loads it fine.
+            pass
+    return relate.connect(store)
 
 
 def norm_target(repo, path):

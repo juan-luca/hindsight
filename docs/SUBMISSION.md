@@ -25,7 +25,8 @@ git history, and answers:
 - `hindsight blame` — tokens and estimated USD per file, from the agent's own transcripts.
 - `hindsight recall "<error>"` — vector search over past error→fix episodes.
 - `hindsight digest` — a memory digest injected into every new agent session.
-- `hindsight prdiff` — provenance of a PR's diff.
+- `hindsight prdiff` + a GitHub Action — every PR gets its provenance commented
+  automatically: the prompts and sessions behind the diff.
 - Plus raw Cypher, neo4j-browser over Bolt, a zero-install viewer, and MCP serving so
   **the agent can query its own past**.
 

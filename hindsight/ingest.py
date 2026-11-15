@@ -20,11 +20,11 @@ except ImportError:
 
 if __package__:
     from . import backfill as backfill_mod
-    from .embed import DIM
+    from .embed import dim
 else:  # run as a script: python3 hindsight/ingest.py
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import backfill as backfill_mod
-    from embed import DIM
+    from embed import dim
 
 # Derived artifacts and environment never become File nodes.
 EXCLUDED_PREFIXES = ("graph/", ".hindsight/", ".venv/")
@@ -103,7 +103,7 @@ def ensure_schema(db):
         "CREATE VECTOR INDEX episode_embedding IF NOT EXISTS "
         "FOR (e:Episode) ON (e.embedding) "
         "OPTIONS {indexConfig: {`vector.dimensions`: %d, "
-        "`vector.similarity_function`: 'cosine'}}" % DIM
+        "`vector.similarity_function`: 'cosine'}}" % dim()
     )
 
 

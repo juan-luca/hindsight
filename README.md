@@ -76,8 +76,10 @@ $ hindsight recall "No such file or directory"
    `relate serve`, the zero-install [viewer](viewer/) (`make view`), or the agent itself.
 4. **Close the loop** — a `SessionStart` hook injects a **memory digest** of past
    sessions into each new session; the [`hindsight` skill](.claude/skills/hindsight/SKILL.md)
-   teaches the agent to answer history questions from the graph with cited evidence; and
-   `hindsight serve` exposes the store over **MCP** to any AI host.
+   teaches the agent to answer history questions from the graph with cited evidence;
+   `hindsight serve` exposes the store over **MCP** to any AI host; and a
+   [GitHub Action](.github/workflows/hindsight-pr.yml) comments the provenance of every
+   PR's diff — **every PR ships with its why**.
 
 ## Quick start — this repo (60 seconds)
 
@@ -154,9 +156,10 @@ like any other code in a PR: that is the point of committing it.
 Built for the [Relate by Neo4j Hackathon](https://relate.devpost.com/) ([submission
 notes](docs/SUBMISSION.md), [demo script](docs/VIDEO.md)). Working today: recorder,
 redaction, incremental ingest (events + git + transcripts), cost attribution,
-error→fix episodes with vector recall, memory digest hook, agent skill, `init` for any
-repo, PR provenance, query tour, static viewer, Bolt/HTTP/MCP serving. Data model:
-[`docs/SCHEMA.md`](docs/SCHEMA.md).
+error→fix episodes with vector recall (pluggable embedder via `HINDSIGHT_EMBEDDER` /
+`HINDSIGHT_EMBED_DIM`), memory digest hook, agent skill, `init` for any repo, PR
+provenance CLI + GitHub Action, query tour, static viewer, Bolt/HTTP/MCP serving.
+Data model: [`docs/SCHEMA.md`](docs/SCHEMA.md).
 
 ## AI use (disclosure)
 

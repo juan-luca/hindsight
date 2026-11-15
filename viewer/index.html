@@ -72,6 +72,8 @@
   <h1>hindsight <span>· the repo's flight recorder, drawn</span></h1>
   <div id="legend"></div>
   <input id="search" placeholder="filter: path, prompt, sha…">
+  <span class="chip" id="fit" title="fit graph">⊡ fit</span>
+  <span class="chip" id="phys" title="toggle physics">physics</span>
 </header>
 <div id="main" style="position:relative">
   <div id="net"></div>
@@ -113,8 +115,16 @@ function caption(n) {
   }
 }
 
+function tooltip(n) {
+  const p = n.properties || {};
+  const keys = Object.keys(p).filter(k => k !== 'embedding').slice(0, 6);
+  return n.labels[0] + '\n' +
+    keys.map(k => k + ': ' + String(p[k]).slice(0, 120)).join('\n');
+}
+
 function build(g) {
   raw = g;
+  if (g.nodes.length > 300) offLabels.add('ToolCall'); // keep big graphs legible
   const nodes = [], edges = [];
   for (const n of g.nodes) {
     const label = n.labels[0];
@@ -125,7 +135,7 @@ function build(g) {
       font: { color: css('--text'), size: 11 },
       shape: st.shape, size: st.size, raw: n,
       hidden: offLabels.has(label),
-      title: undefined,
+      title: tooltip(n),
     });
   }
   for (const r of g.relationships) {
@@ -191,6 +201,15 @@ document.getElementById('search').addEventListener('input', e => {
     return { id: n.id, opacity: hay.includes(q) ? 1 : 0.12 };
   }));
 });
+
+document.getElementById('fit').onclick = () => network && network.fit({ animation: true });
+let physicsOn = true;
+document.getElementById('phys').onclick = function () {
+  if (!network) return;
+  physicsOn = !physicsOn;
+  network.setOptions({ physics: { enabled: physicsOn } });
+  this.classList.toggle('off', !physicsOn);
+};
 
 document.getElementById('pick').addEventListener('change', e => {
   const f = e.target.files[0];
