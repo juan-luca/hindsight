@@ -1,0 +1,15 @@
+# Environment
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+
+# Relate store: only the snapshot (graph.json) and manifest.json travel in git.
+# Locks and the WAL are per-machine runtime state, recreated on open.
+graph/.cypherlite/
+graph/.cypherlite.lock
+graph/.cypherlite.writer
+graph/wal/
+
+# Local scratch
+.hindsight/tmp/
