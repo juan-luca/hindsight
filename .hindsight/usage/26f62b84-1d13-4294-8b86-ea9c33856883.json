@@ -270,12 +270,12 @@
  },
  "models": {
   "claude-opus-5-5": {
-   "cache_read": 40854847,
-   "cache_write": 510989,
-   "input": 392,
-   "messages": 195,
-   "output": 183917,
-   "usd": 15.9388
+   "cache_read": 41290695,
+   "cache_write": 512914,
+   "input": 396,
+   "messages": 197,
+   "output": 185457,
+   "usd": 16.0722
   }
  },
  "session_id": "26f62b84-1d13-4294-8b86-ea9c33856883",
