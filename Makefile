@@ -17,7 +17,7 @@ rebuild:
 tour:
 	@for q in queries/*.cypher; do \
 		echo ""; echo "== $$q"; \
-		$(RELATE) -d ./graph --read-only --markdown < $$q; \
+		$(RELATE) query -d ./graph --markdown < $$q; \
 	done
 
 ## Bolt (7687, neo4j-browser compatible) + HTTP (7474) + MCP (7475)
