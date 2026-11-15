@@ -108,7 +108,7 @@ why does hindsight/embed.py exist?
 ● 2026-11-15 15:19 · session 26f62b84 asked:
   "Lee el recado ~/.claude/… y despues la nota ~/.claude/…, y segui de punta a punta …"
     ↳ Edit at 2026-11-15 15:27 +30/-0
-    ⇒ committed 39cf4d2 The agent asks its own past: MCP self-query, real prices, seen-before…
+    ⇒ committed 8c3e03a The agent asks its own past: MCP self-query, real prices, seen-before…
 ● cost (estimate): 4,499 output tokens · $0.91 across 2 session(s)
 
 $ hindsight blame
