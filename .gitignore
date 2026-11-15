@@ -13,3 +13,7 @@ graph/wal/
 
 # Local scratch
 .hindsight/tmp/
+
+# Packaging
+*.egg-info/
+build/

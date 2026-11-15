@@ -8,6 +8,7 @@
   hindsight ingest          replay events + git + transcripts into graph/
   hindsight init [dir]      install the recorder into any repository
   hindsight prdiff          provenance of the files changed vs a base ref
+  hindsight scrub [--check] privacy pass over the recorded history
   hindsight serve           Bolt (7687) + HTTP (7474) + MCP (7475) on graph/
 """
 import argparse
@@ -19,11 +20,13 @@ import sys
 
 if __package__:
     from . import ingest as ingest_mod
-    from .embed import embed, DIM
+    from . import privacy as privacy_mod
+    from .embed import embed
 else:  # run as a script: python3 hindsight/cli.py
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import ingest as ingest_mod
-    from embed import embed, DIM
+    import privacy as privacy_mod
+    from embed import embed
 
 PKG_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -81,12 +84,23 @@ def cmd_why(args):
                 "MATCH (p:Prompt)-[:TRIGGERED]->(t:ToolCall)-[:WROTE]->"
                 "(f:File {path: $path}) "
                 "MATCH (t)-[:IN_SESSION]->(s:Session) "
-                "WITH s, p, collect([t.tool, t.ts, t.ok]) AS calls "
-                "RETURN s.id AS sid, p.ts AS ts, p.text AS text, calls "
+                "WITH s, p, t ORDER BY t.ts "
+                "WITH s, p, collect([t.tool, t.ts, t.ok, t.added, t.removed]) AS calls "
+                "RETURN s.id AS sid, p.id AS pid, p.ts AS ts, p.text AS text, "
+                "p.answer AS answer, calls "
                 "ORDER BY p.ts",
                 {"path": target},
             )
         )
+        # The full causal chain: the prompt's own tool calls committed it.
+        landed = {}
+        for row in db.execute(
+            "MATCH (p:Prompt)-[:TRIGGERED]->(:ToolCall)-[:COMMITTED]->(c:Commit)"
+            "-[:CHANGED]->(:File {path: $path}) "
+            "RETURN DISTINCT p.id AS pid, c.sha AS sha, c.message AS message",
+            {"path": target},
+        ):
+            landed.setdefault(row["pid"], []).append(row)
         commits = list(
             db.execute(
                 "MATCH (c:Commit)-[:CHANGED]->(:File {path: $path}) "
@@ -111,8 +125,13 @@ def cmd_why(args):
     for row in rows:
         print("● %s · session %s asked:" % (day(row["ts"]), row["sid"][:8]))
         print('  "%s"' % short(row["text"], 160))
-        for tool, ts, ok in row["calls"]:
-            print("    ↳ %s at %s%s" % (tool, day(ts), "" if ok else "  (FAILED)"))
+        for tool, ts, ok, added, removed in row["calls"]:
+            delta = " +%s/-%s" % (added or 0, removed or 0) if added is not None else ""
+            print("    ↳ %s at %s%s%s" % (tool, day(ts), delta, "" if ok else "  (FAILED)"))
+        for commit in landed.get(row["pid"], []):
+            print("    ⇒ committed %s %s" % (commit["sha"][:7], short(commit["message"], 70)))
+        if row["answer"]:
+            print('    agent: "%s"' % short(row["answer"], 150))
     if rows:
         print()
     if commits:
@@ -417,10 +436,62 @@ def cmd_prdiff(args):
 
 # ---------------------------------------------------------------- init
 
-HOOK_EVENTS = ("SessionStart", "UserPromptSubmit", "PostToolUse", "Stop")
-DIGEST_HOOK = (
-    "command -v hindsight >/dev/null 2>&1 && hindsight digest --hook || true"
+HOOK_EVENTS = (
+    "SessionStart",
+    "UserPromptSubmit",
+    "PostToolUse",
+    "PostToolUseFailure",
+    "Stop",
+    "SessionEnd",
 )
+LAUNCHER = 'sh "$CLAUDE_PROJECT_DIR/.hindsight/hook.sh" %s'
+OURS = ("record.py", "hook.sh", "hindsight digest")
+
+
+def _without_ours(entries):
+    """Drop earlier hindsight hooks (any version) so init upgrades in place."""
+    kept = []
+    for entry in entries:
+        hooks = [
+            h for h in entry.get("hooks", [])
+            if not any(mark in str(h.get("command", "")) for mark in OURS)
+        ]
+        if hooks:
+            kept.append(dict(entry, hooks=hooks))
+    return kept
+
+
+def install_hooks(settings):
+    """Wire the portable launcher into every hook event Hindsight records."""
+    hooks = settings.setdefault("hooks", {})
+    for event in HOOK_EVENTS:
+        entries = _without_ours(hooks.get(event, []))
+        commands = [{"type": "command", "command": LAUNCHER % "record"}]
+        if event == "SessionStart":
+            commands.append({"type": "command", "command": LAUNCHER % "digest"})
+        entry = {"hooks": commands}
+        if event in ("PostToolUse", "PostToolUseFailure"):
+            entry["matcher"] = "*"
+        entries.append(entry)
+        hooks[event] = entries
+    return settings
+
+
+def _read_json(path):
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, encoding="utf-8") as handle:
+            return json.load(handle)
+    except ValueError:
+        sys.exit("%s is not valid JSON: fix it and rerun" % path)
+
+
+def _write_json(path, data):
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with open(path, "w", encoding="utf-8", newline="\n") as handle:
+        json.dump(data, handle, indent=2)
+        handle.write("\n")
 
 
 def cmd_init(args):
@@ -433,40 +504,30 @@ def cmd_init(args):
     keep = os.path.join(events_dir, ".gitkeep")
     if not os.path.exists(keep):
         open(keep, "w").close()
-
-    recorder_dst = os.path.join(target, ".hindsight", "record.py")
-    shutil.copyfile(os.path.join(PKG_DIR, "record.py"), recorder_dst)
+    for name in ("record.py", "hook.sh"):
+        shutil.copyfile(os.path.join(PKG_DIR, name), os.path.join(target, ".hindsight", name))
 
     settings_path = os.path.join(target, ".claude", "settings.json")
-    os.makedirs(os.path.dirname(settings_path), exist_ok=True)
-    settings = {}
-    if os.path.exists(settings_path):
-        try:
-            with open(settings_path, encoding="utf-8") as handle:
-                settings = json.load(handle)
-        except ValueError:
-            sys.exit("%s is not valid JSON — fix it and rerun" % settings_path)
-    hooks = settings.setdefault("hooks", {})
-    record_cmd = 'python3 "$CLAUDE_PROJECT_DIR/.hindsight/record.py"'
-    added = []
-    for event in HOOK_EVENTS:
-        entries = hooks.setdefault(event, [])
-        flat = json.dumps(entries)
-        if "record.py" not in flat:
-            entry = {"hooks": [{"type": "command", "command": record_cmd}]}
-            if event == "PostToolUse":
-                entry["matcher"] = "*"
-            entries.append(entry)
-            added.append(event)
-    start_flat = json.dumps(hooks.get("SessionStart", []))
-    if "hindsight digest" not in start_flat:
-        hooks["SessionStart"].append(
-            {"hooks": [{"type": "command", "command": DIGEST_HOOK}]}
-        )
-        added.append("SessionStart(digest)")
-    with open(settings_path, "w", encoding="utf-8") as handle:
-        json.dump(settings, handle, indent=2)
-        handle.write("\n")
+    _write_json(settings_path, install_hooks(_read_json(settings_path)))
+
+    mcp_path = os.path.join(target, ".mcp.json")
+    mcp = _read_json(mcp_path)
+    mcp.setdefault("mcpServers", {})["hindsight"] = {
+        "command": "sh",
+        "args": [".hindsight/hook.sh", "mcp"],
+    }
+    _write_json(mcp_path, mcp)
+
+    # A CRLF checkout (Windows, core.autocrlf=true) would break the launcher.
+    attributes = os.path.join(target, ".gitattributes")
+    rule = ".hindsight/hook.sh text eol=lf"
+    current = ""
+    if os.path.exists(attributes):
+        with open(attributes, encoding="utf-8") as handle:
+            current = handle.read()
+    if rule not in current:
+        with open(attributes, "a", encoding="utf-8", newline="\n") as handle:
+            handle.write(("" if not current or current.endswith("\n") else "\n") + rule + "\n")
 
     skill_src = os.path.join(PKG_DIR, "skill.md")
     skill_dst = os.path.join(target, ".claude", "skills", "hindsight", "SKILL.md")
@@ -475,14 +536,15 @@ def cmd_init(args):
         shutil.copyfile(skill_src, skill_dst)
 
     print("hindsight installed into %s" % target)
-    print("  recorder : .hindsight/record.py (stdlib-only, fail-open)")
-    print("  hooks    : %s" % (", ".join(added) if added else "already wired"))
+    print("  recorder : .hindsight/record.py + hook.sh (stdlib-only, fail-open, any OS)")
+    print("  hooks    : %s" % ", ".join(HOOK_EVENTS))
+    print("  mcp      : .mcp.json -> relate serve --mcp stdio --read-only=live")
     print("  skill    : .claude/skills/hindsight/SKILL.md")
     print("\nnext steps:")
-    print("  1. use your coding agent normally — sessions land in .hindsight/events/")
-    print("  2. pip install relate-db  (once)")
-    print("  3. hindsight ingest       (build/update graph/)")
-    print("  4. hindsight why <file> · blame · recall · serve")
+    print("  1. use Claude Code normally: sessions land in .hindsight/events/")
+    print("  2. hindsight ingest       (build/update graph/; needs the relate CLI once)")
+    print("  3. hindsight why <file> · blame · recall · scrub --check")
+    print("  4. commit .hindsight/ and graph/ with your code")
 
 
 # ---------------------------------------------------------------- plumbing
@@ -491,21 +553,38 @@ def cmd_ingest(args):
     ingest_mod.run()
 
 
+def cmd_scrub(args):
+    repo = ingest_mod.find_repo()
+    _, findings = privacy_mod.run(repo, check=args.check)
+    if args.check and findings:
+        raise SystemExit(1)
+
+
 def cmd_serve(args):
     repo = ingest_mod.find_repo()
     store = os.path.join(repo, "graph")
+    relate_cli = ingest_mod.relate_binary()
+    if relate_cli is None:
+        sys.exit(
+            "the relate CLI is not on PATH: see README › Install "
+            "(https://github.com/relatedb/relate/releases)"
+        )
+    if not os.path.isdir(os.path.join(store, ".cypherlite")):
+        open_db(repo, read_only=False).close()  # a fresh clone: materialize the runtime
     cmd = [
-        "relate", "serve", "--database", store,
+        relate_cli, "serve", "--database", store,
         "--bolt", str(args.bolt), "--http", str(args.http), "--mcp", str(args.mcp),
+        "--read-only=live",
     ]
-    print("serving %s — bolt :%d · http :%d · mcp :%d" % (store, args.bolt, args.http, args.mcp))
-    try:
-        raise SystemExit(subprocess.call(cmd))
-    except FileNotFoundError:
-        sys.exit("the `relate` CLI is not on PATH — install: curl -sSfL https://relatedb.ai/install.sh | bash")
+    print("serving %s (read-only) · bolt :%d · http :%d · mcp :%d" % (store, args.bolt, args.http, args.mcp))
+    raise SystemExit(subprocess.call(cmd))
 
 
 def main(argv=None):
+    for stream in (sys.stdout, sys.stderr):
+        # Box-drawing and quotes in the output; Windows consoles default to cp1252.
+        if hasattr(stream, "reconfigure") and (stream.encoding or "").lower() != "utf-8":
+            stream.reconfigure(encoding="utf-8", errors="replace")
     parser = argparse.ArgumentParser(
         prog="hindsight",
         description="the black box your repo ships with — query your AI coding history",
@@ -541,6 +620,10 @@ def main(argv=None):
     p = sub.add_parser("prdiff", help="provenance of files changed vs a base ref (markdown)")
     p.add_argument("--base", default="origin/main")
     p.set_defaults(func=cmd_prdiff)
+
+    p = sub.add_parser("scrub", help="privacy pass over .hindsight/ (rewrite, or --check to audit)")
+    p.add_argument("--check", action="store_true", help="change nothing; exit 1 on findings")
+    p.set_defaults(func=cmd_scrub)
 
     p = sub.add_parser("serve", help="bolt + http + mcp on graph/")
     p.add_argument("--bolt", type=int, default=7687)

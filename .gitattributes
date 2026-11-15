@@ -1,0 +1,5 @@
+# Shell scripts must keep LF or `sh` chokes on `\r` (Windows checkouts with
+# core.autocrlf=true would otherwise convert them). The recorded history
+# (events, graph snapshot) stays byte-identical across platforms.
+* text=auto eol=lf
+*.sh text eol=lf

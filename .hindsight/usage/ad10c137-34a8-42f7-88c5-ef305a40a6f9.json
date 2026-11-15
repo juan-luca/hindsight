@@ -1,0 +1,155 @@
+{
+ "episodes": [
+  {
+   "file": null,
+   "fix_detail": "tail -2 .hindsight/events/ad10c137-34a8-42f7-88c5-ef305a40a6f9.jsonl | head -c 800",
+   "fix_tool": "Bash",
+   "fix_tool_use_id": "",
+   "fix_ts": "2026-11-15T01:57:22.195Z",
+   "id": "ad10c137/toolu_01KrnXwmUNkrR6VnjAUaGXXq",
+   "status": "fixed",
+   "text": "Bash cat /nonexistent/hindsight-test-file.txt → Exit code 1\ncat: /nonexistent/hindsight-test-file.txt: No such file or directory",
+   "tool_use_id": "toolu_01KrnXwmUNkrR6VnjAUaGXXq",
+   "ts": "2026-11-15T01:57:17.803Z"
+  },
+  {
+   "file": null,
+   "fix_detail": "PAT=\"[REDACTED:GITHUB_TOKEN]\" && git push \"https://x-access-token:[REDACTED] main:main 2>&1 | tail -3 && git remote add origin https://github.com/juan-luca/hindsight.git 2>/dev/null; git remote -v && git config branch.main.remote origin && git config ",
+   "fix_tool": "Bash",
+   "fix_tool_use_id": "",
+   "fix_ts": "2026-11-15T02:06:27.717Z",
+   "id": "ad10c137/toolu_01U7brNBHP8GGKseQ7drmdWe",
+   "status": "fixed",
+   "text": "Bash PAT=\"[REDACTED:GITHUB_TOKEN]\" && RESP=$(curl -s -w \"\\n%{http_code}\" -H \"Authorization: token $PAT\" -H \"Accept: application/vnd.github+json\" https://api.github.com/user/repos -d '{\"name\":\"hindsight\",\"description\":\"The black box your repo ships with: AI coding sessions recorded into a → Exit code 1\n201\nTraceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n  File \"/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/json/__init__.py\", line 346, in loads\n    return _default_decoder.decode(s)\n  File \"/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/json/decoder.py\", line 340, in decode\n    raise JSONDecodeError(\"Extra data\", s, end)\njson.decoder.JSONDecodeError: Extra data: line 127 column 1 (char 6221)",
+   "tool_use_id": "toolu_01U7brNBHP8GGKseQ7drmdWe",
+   "ts": "2026-11-15T02:06:19.476Z"
+  },
+  {
+   "file": null,
+   "fix_detail": "SCRATCH=<tmp>/claude-code/claude-501/<project>/ad10c137-34a8-42f7-88c5-ef305a40a6f9/scratchpad/clone-test && cd . && mkdir -p \"$SCRATCH/graph/wal\" && .venv/bin/pyt",
+   "fix_tool": "Bash",
+   "fix_tool_use_id": "",
+   "fix_ts": "2026-11-15T02:15:26.444Z",
+   "id": "ad10c137/toolu_01NoiWrQxRBUciSWmLcySJ9R",
+   "status": "fixed",
+   "text": "Bash SCRATCH=<tmp>/claude-code/claude-501/<project>/ad10c137-34a8-42f7-88c5-ef305a40a6f9/scratchpad/clone-test && rm -rf \"$SCRATCH\" && mkdir -p \"$SCRATCH/graph\" && cd . → Exit code 1\nTraceback (most recent call last):\n  File \"<string>\", line 3, in <module>\n  File \"./.venv/lib/python3.9/site-packages/relate/__init__.py\", line 190, in connect\n    return Connection(database, namespace=namespace, read_only=read_only)\n  File \"./.venv/lib/python3.9/site-packages/relate/connection.py\", line 122, in __init__\n    self._db = _native(lambda: Database(database, namespace, read_only=read_only))\n  File \"./.venv/lib/python3.9/site-packages/relate/connection.py\", line 73, in _native\n    raise _map_call_error(e) from None\nrelate.exceptions.OperationalError: storage error: read-only open requires an existing database at <tmp>/claude-code/claude-501/<project>/ad10c137-34a8-42f7-88c5-ef305a40a6f9/scratchpad/clone-test/graph",
+   "tool_use_id": "toolu_01NoiWrQxRBUciSWmLcySJ9R",
+   "ts": "2026-11-15T02:15:18.666Z"
+  }
+ ],
+ "files": {
+  ".claude/settings.json": {
+   "messages": 1,
+   "tokens_out": 560,
+   "usd": 0.2808
+  },
+  ".github/workflows/hindsight-pr.yml": {
+   "messages": 1,
+   "tokens_out": 940,
+   "usd": 0.1966
+  },
+  "Makefile": {
+   "messages": 1,
+   "tokens_out": 371,
+   "usd": 0.1333
+  },
+  "README.md": {
+   "messages": 2,
+   "tokens_out": 5072,
+   "usd": 0.6648
+  },
+  "docs/SCHEMA.md": {
+   "messages": 1,
+   "tokens_out": 1851,
+   "usd": 0.4375
+  },
+  "docs/SUBMISSION.md": {
+   "messages": 2,
+   "tokens_out": 2289,
+   "usd": 0.5005
+  },
+  "docs/VIDEO.md": {
+   "messages": 2,
+   "tokens_out": 1740,
+   "usd": 0.4855
+  },
+  "hindsight/__init__.py": {
+   "messages": 1,
+   "tokens_out": 227,
+   "usd": 0.0918
+  },
+  "hindsight/__main__.py": {
+   "messages": 1,
+   "tokens_out": 227,
+   "usd": 0.0918
+  },
+  "hindsight/backfill.py": {
+   "messages": 2,
+   "tokens_out": 9180,
+   "usd": 0.9509
+  },
+  "hindsight/cli.py": {
+   "messages": 4,
+   "tokens_out": 13291,
+   "usd": 1.6441
+  },
+  "hindsight/embed.py": {
+   "messages": 2,
+   "tokens_out": 2531,
+   "usd": 0.7625
+  },
+  "hindsight/ingest.py": {
+   "messages": 2,
+   "tokens_out": 6939,
+   "usd": 0.9573
+  },
+  "hindsight/pricing.json": {
+   "messages": 1,
+   "tokens_out": 1072,
+   "usd": 0.2778
+  },
+  "hindsight/record.py": {
+   "messages": 2,
+   "tokens_out": 2007,
+   "usd": 0.757
+  },
+  "hindsight/skill.md": {
+   "messages": 1,
+   "tokens_out": 1689,
+   "usd": 0.3202
+  },
+  "pyproject.toml": {
+   "messages": 1,
+   "tokens_out": 227,
+   "usd": 0.0918
+  },
+  "queries/50_what_did_it_cost.cypher": {
+   "messages": 1,
+   "tokens_out": 371,
+   "usd": 0.1333
+  },
+  "queries/60_error_episodes.cypher": {
+   "messages": 1,
+   "tokens_out": 371,
+   "usd": 0.1333
+  },
+  "viewer/index.html": {
+   "messages": 2,
+   "tokens_out": 6358,
+   "usd": 0.8769
+  }
+ },
+ "models": {
+  "claude-fable-5": {
+   "cache_read": 17751091,
+   "cache_write": 290776,
+   "input": 164,
+   "messages": null,
+   "output": 117163,
+   "usd": 29.4264
+  }
+ },
+ "session_id": "ad10c137-34a8-42f7-88c5-ef305a40a6f9",
+ "source": "graph-export",
+ "version": 1
+}

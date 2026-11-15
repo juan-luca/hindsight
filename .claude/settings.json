@@ -5,11 +5,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/hindsight/record.py\""
+            "command": "sh \"$CLAUDE_PROJECT_DIR/hindsight/hook.sh\" record"
           },
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR/.venv/bin/python\" \"$CLAUDE_PROJECT_DIR/hindsight/cli.py\" digest --hook 2>/dev/null || true"
+            "command": "sh \"$CLAUDE_PROJECT_DIR/hindsight/hook.sh\" digest"
           }
         ]
       }
@@ -19,7 +19,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/hindsight/record.py\""
+            "command": "sh \"$CLAUDE_PROJECT_DIR/hindsight/hook.sh\" record"
           }
         ]
       }
@@ -30,7 +30,18 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/hindsight/record.py\""
+            "command": "sh \"$CLAUDE_PROJECT_DIR/hindsight/hook.sh\" record"
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"$CLAUDE_PROJECT_DIR/hindsight/hook.sh\" record"
           }
         ]
       }
@@ -40,7 +51,17 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/hindsight/record.py\""
+            "command": "sh \"$CLAUDE_PROJECT_DIR/hindsight/hook.sh\" record"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"$CLAUDE_PROJECT_DIR/hindsight/hook.sh\" record"
           }
         ]
       }

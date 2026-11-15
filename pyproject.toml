@@ -18,4 +18,4 @@ hindsight = "hindsight.cli:main"
 packages = ["hindsight"]
 
 [tool.setuptools.package-data]
-hindsight = ["pricing.json", "skill.md"]
+hindsight = ["pricing.json", "skill.md", "hook.sh"]
